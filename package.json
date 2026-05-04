@@ -1,0 +1,43 @@
+{
+  "name": "conduit",
+  "description": "A simple FCA wrapper library with typescript support",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "facebook-chat-api",
+    "library",
+    "wrapper"
+  ],
+  "author": "theophilusdev",
+  "license": "GNU GPLV3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheophilusWorks/conduit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TheophilusWorks/conduit/issues"
+  },
+  "homepage": "https://github.com/TheophilusWorks/conduit#readme",
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@dongdev/fca-unofficial": "^4.0.3"
+  }
+}
