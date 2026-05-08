@@ -1,4 +1,4 @@
-# conduit
+# @theophilusdev/conduit
 
 [![GitHub](https://img.shields.io/badge/github-TheophilusWorks%2Fconduit-blue?logo=github)](https://github.com/TheophilusWorks/conduit)
 
@@ -16,7 +16,7 @@ conduit.on("message:create", async (ctx) => {
 ## Install
 
 ```bash
-npm install conduit
+npm install @theophilusdev/conduit
 ```
 
 ## Quick Start

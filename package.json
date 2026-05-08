@@ -24,6 +24,9 @@
   ],
   "author": "theophilusdev",
   "license": "GNU GPLV3",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TheophilusWorks/conduit.git"
