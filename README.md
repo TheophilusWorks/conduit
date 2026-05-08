@@ -5,10 +5,12 @@
 > A lightweight TypeScript wrapper around [`@dongdev/fca-unofficial`](https://github.com/dongp06/fca-unofficial) with a clean, middleware-based event system.
 
 ```ts
-const conduit = new ConduitClient({ listenEvents: true });
-await conduit.login({ appstate });
+import { ConduitClient } from "@theophilusdev/conduit";
 
-conduit.on("message:create", async (ctx) => {
+const client = new ConduitClient({ listenEvents: true });
+await client.login({ appstate });
+
+client.on("message:create", async (ctx) => {
   await ctx.reply(`hey, you said: ${ctx.body}`);
 });
 ```
@@ -22,18 +24,19 @@ npm install @theophilusdev/conduit
 ## Quick Start
 
 ```ts
-import { ConduitClient } from "conduit";
+import { ConduitClient } from "@theophilusdev/conduit";
 import appstate from "./appstate.json" assert { type: "json" };
 
-const conduit = new ConduitClient({ listenEvents: true });
+const client = new ConduitClient({ listenEvents: true });
 
-await conduit.login({ appstate });
+await client.login({ appstate });
 
-conduit.on("message:create", async (ctx, next) => {
+client.on("message:create", async (ctx, next) => {
   if (ctx.body === "ping") {
     await ctx.reply("pong");
     return;
   }
+
   await next();
 });
 ```
@@ -50,56 +53,67 @@ Pass **one** of the following to `.login()`:
 
 ```ts
 // appstate (recommended)
-await conduit.login({ appstate: [...] });
+await client.login({ appstate: [...] });
 
 // raw cookies
-await conduit.login({ cookies: "c_user=...; xs=..." });
+await client.login({ cookies: "c_user=...; xs=..." });
 
 // email/password (not recommended)
-await conduit.login({ account: { email: "...", password: "..." } });
+await client.login({
+  account: { email: "...", password: "..." },
+});
 ```
 
 ## Events
 
-Register handlers with `.on(event, ...middlewares)`. Handlers receive an enriched context object and an optional `next` function to pass control down the stack.
+Register handlers with `.on(event, ...middlewares)`.
 
-All events include a `send(body)` helper. Events in the `message:*` namespace additionally include `reply(body)` and `react(emoji)`.
+Handlers receive a context object and an optional `next()` function for middleware chaining.
+
+All events include:
+
+- `send(body)`
+
+Message events additionally include:
+
+- `reply(body)`
+- `react(emoji)`
 
 ### Message Events
 
-| Event             | Trigger                                                        |
-| ----------------- | -------------------------------------------------------------- |
-| `message:create`  | New message received                                           |
-| `message:respond` | Reply to an existing message                                   |
-| `message:remove`  | Message unsent by sender                                       |
-| `message:react`   | Reaction added or removed                                      |
-| `message:writing` | User started or stopped typing (requires `listenTyping: true`) |
-| `message:read`    | Thread or message marked as read                               |
+| Event             | Description                                      |
+| ----------------- | ------------------------------------------------ |
+| `message:create`  | New message received                             |
+| `message:respond` | Reply to an existing message                     |
+| `message:remove`  | Message unsent by sender                         |
+| `message:react`   | Reaction added or removed                        |
+| `message:writing` | Typing indicator (requires `listenTyping: true`) |
+| `message:read`    | Thread or message marked as read                 |
 
 ### User Events
 
-| Event         | Trigger                                      |
+| Event         | Description                                  |
 | ------------- | -------------------------------------------- |
 | `user:create` | User added to a group thread                 |
 | `user:remove` | User left or was removed from a group thread |
 
 ### Thread Events
 
-| Event                     | Trigger                                    |
-| ------------------------- | ------------------------------------------ |
-| `thread:update`           | Any thread metadata change (catch-all)     |
-| `thread:title_change`     | Group title updated                        |
-| `thread:photo_replaced`   | Group photo changed                        |
-| `thread:theme_changed`    | Chat theme or color changed                |
-| `thread:nickname_changed` | A participant's nickname changed           |
-| `thread:admin_changed`    | A participant promoted or demoted as admin |
+| Event                     | Description                  |
+| ------------------------- | ---------------------------- |
+| `thread:update`           | Catch-all for thread updates |
+| `thread:title_change`     | Group title updated          |
+| `thread:photo_replaced`   | Group photo changed          |
+| `thread:theme_changed`    | Chat theme changed           |
+| `thread:nickname_changed` | Participant nickname updated |
+| `thread:admin_changed`    | Admin role changed           |
 
 ## Middleware
 
-`.on()` accepts multiple handlers. Each must call `next()` to pass control to the next one.
+`.on()` accepts multiple handlers. Each must call `next()` to continue the chain.
 
 ```ts
-conduit.on(
+client.on(
   "message:create",
   async (ctx, next) => {
     console.log("middleware 1");
@@ -114,26 +128,31 @@ conduit.on(
 
 ## Raw FCA Access
 
-For events or methods not yet covered by conduit, you can drop down to the raw FCA layer:
+Drop down to FCA when needed:
 
 ```ts
 // raw FCA event
-conduit.onFca("presence", async (data) => {
+client.onFca("presence", async (data) => {
   console.log(data);
 });
 
-// raw FCA api (no type safety)
-conduit.api.getThreadList(10, null, ["INBOX"]);
+// raw FCA API (no type safety)
+client.api.getThreadList(10, null, ["INBOX"]);
 ```
 
 ## API Reference
 
-See [docs/DOCS.md](docs/DOCS.md) for the full API reference covering `client.messages`, `client.threads`, `client.users`, and `client.account`.
+See [docs/DOCS.md](docs/DOCS.md) for full API details:
+
+- `client.messages`
+- `client.threads`
+- `client.users`
+- `client.account`
 
 ## License
 
-GNU GPL v3 © [theophilusdev](https://github.com/TheophilusWorks)
+GNU GPL v3 © theophilusdev
 
 ---
 
-Built on top of [`@dongdev/fca-unofficial`](https://github.com/dongp06/fca-unofficial). Credit to dongp06 and all contributors to the fca-unofficial project.
+Built on top of [`@dongdev/fca-unofficial`](https://github.com/dongp06/fca-unofficial).
