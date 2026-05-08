@@ -61,22 +61,43 @@ export interface ThreadEventBase {
   participantIDs: string[];
 }
 
+// ─── Enrichment Mixins ────────────────────────────────────────────────────────
+
+/** Available on all Conduit event payloads. */
+export interface Sendable {
+  /** Send a message to the same thread. */
+  send(body: string): Promise<void>;
+}
+
+/** Available on message events only (`message:*`). */
+export interface Replyable extends Sendable {
+  /** Reply to this specific message. */
+  reply(body: string): Promise<void>;
+  /** React to this specific message with an emoji. */
+  react(emoji: string): Promise<void>;
+}
+
 // ─── Message Payloads ─────────────────────────────────────────────────────────
 
-/** Emitted when a new message is received. Maps to FCA `message`. */
-export interface MessageCreatePayload extends Message {
+/**
+ * Emitted when a new message is received. Maps to FCA `message`.
+ *
+ * @note FCA inconsistency: `timestamp` arrives as a string here,
+ * unlike `message_reply` where it is a number.
+ */
+export interface MessageCreatePayload extends Message, Replyable {
   isGroup: boolean;
 }
 
 /** Emitted when a user replies to a message. Maps to FCA `message_reply`. */
-export interface MessageRespondPayload extends Message {
+export interface MessageRespondPayload extends Message, Replyable {
   isGroup: boolean;
   /** The message being replied to. */
   messageReply: Message;
 }
 
 /** Emitted when a message is unsent by its sender. Maps to FCA `message_unsend`. */
-export interface MessageRemovePayload {
+export interface MessageRemovePayload extends Sendable {
   threadID: string;
   messageID: string;
   senderID: string;
@@ -84,7 +105,7 @@ export interface MessageRemovePayload {
 }
 
 /** Emitted when a reaction is added or removed on a message. Maps to FCA `message_reaction`. */
-export interface MessageReactPayload {
+export interface MessageReactPayload extends Sendable {
   threadID: string;
   messageID: string;
   /** The user who owns the message. */
@@ -95,38 +116,38 @@ export interface MessageReactPayload {
 }
 
 /** Emitted when a user starts or stops typing. Maps to FCA `typ`. */
-export interface MessageWritingPayload {
+export interface MessageWritingPayload extends Sendable {
   threadID: string;
   senderID: string;
   isTyping: boolean;
 }
 
 /** Emitted when a thread or message is marked as read. Maps to FCA `read_receipt`. */
-export interface MessageReadPayload {
+export interface MessageReadPayload extends Sendable {
   threadID: string;
   readerID: string;
   time: string;
 }
 
-// ─── Thread Payloads ─────────────────────────────────────────────────────────
+// ─── Thread Payloads ──────────────────────────────────────────────────────────
 
 /**
  * Emitted on any thread metadata change. Catch-all for the raw FCA `threadUpdate` event.
  * For specific changes, prefer the narrower `thread:*` events.
  */
-export interface ThreadUpdatePayload extends ThreadEventBase {
+export interface ThreadUpdatePayload extends ThreadEventBase, Sendable {
   logMessageType: string;
   logMessageData: Record<string, any>;
 }
 
 /** Emitted when the group thread title is changed. Maps to FCA `threadUpdate` → `log:thread-name`. */
-export interface ThreadTitleChangePayload extends ThreadEventBase {
+export interface ThreadTitleChangePayload extends ThreadEventBase, Sendable {
   /** The new thread title. */
   name: string;
 }
 
 /** Emitted when the group photo is changed. Maps to FCA `threadUpdate` → `log:thread-image`. */
-export interface ThreadPhotoReplacedPayload extends ThreadEventBase {
+export interface ThreadPhotoReplacedPayload extends ThreadEventBase, Sendable {
   image: {
     attachmentID: string;
     width: number;
@@ -137,7 +158,7 @@ export interface ThreadPhotoReplacedPayload extends ThreadEventBase {
 }
 
 /** Emitted when the chat theme or color is changed. Maps to FCA `threadUpdate` → `log:thread-color`. */
-export interface ThreadThemeChangedPayload extends ThreadEventBase {
+export interface ThreadThemeChangedPayload extends ThreadEventBase, Sendable {
   themeColor: string;
   gradient: string;
   themeID: string;
@@ -147,7 +168,9 @@ export interface ThreadThemeChangedPayload extends ThreadEventBase {
 }
 
 /** Emitted when a participant's nickname is changed. Maps to FCA `threadUpdate` → `log:user-nickname`. */
-export interface ThreadNicknameChangedPayload extends ThreadEventBase {
+export interface ThreadNicknameChangedPayload
+  extends ThreadEventBase,
+    Sendable {
   /** The participant whose nickname was changed. */
   participantID: string;
   /** The new nickname. Empty string if cleared. */
@@ -155,7 +178,7 @@ export interface ThreadNicknameChangedPayload extends ThreadEventBase {
 }
 
 /** Emitted when a participant's admin status is changed. Maps to FCA `threadUpdate` → `log:thread-admins`. */
-export interface ThreadAdminChangedPayload extends ThreadEventBase {
+export interface ThreadAdminChangedPayload extends ThreadEventBase, Sendable {
   /** The participant whose admin status changed. */
   targetID: string;
   /** Whether the participant was promoted or demoted. */
@@ -171,12 +194,12 @@ export interface AddedParticipant {
 }
 
 /** Emitted when a user is added to a group thread. Maps to FCA `threadUpdate` → `log:subscribe`. */
-export interface UserCreatePayload extends ThreadEventBase {
+export interface UserCreatePayload extends ThreadEventBase, Sendable {
   addedParticipants: AddedParticipant[];
 }
 
 /** Emitted when a user is removed from or leaves a group thread. Maps to FCA `threadUpdate` → `log:unsubscribe`. */
-export interface UserRemovePayload extends ThreadEventBase {
+export interface UserRemovePayload extends ThreadEventBase, Sendable {
   /** The fbid of the participant who left or was removed. */
   leftParticipantFbID: string;
 }
