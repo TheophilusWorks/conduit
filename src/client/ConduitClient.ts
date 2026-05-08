@@ -6,6 +6,11 @@ import {
   Middleware,
 } from "../types.js";
 import { toFcaEvent } from "../utils/toFcaEvent.js";
+import { ConduitError } from "../errors/ConduitError.js";
+import { ConduitMessagesAPI } from "../api/ConduitMessagesAPI.js";
+import { ConduitThreadsAPI } from "../api/ConduitThreadsAPI.js";
+import { ConduitUsersAPI } from "../api/ConduitUsersAPI.js";
+import { ConduitAccountAPI } from "../api/ConduitAccountAPI.js";
 
 /**
  * Set of Conduit events that are dispatched via the fan-out mechanism,
@@ -54,6 +59,18 @@ export class ConduitClient {
   /** Underlying FCA bot instance. `null` until {@link login} resolves. */
   private _client: MessengerBot | null;
 
+  /** Lazily-initialized messages API wrapper. */
+  private _messages: ConduitMessagesAPI | null = null;
+
+  /** Lazily-initialized threads API wrapper. */
+  private _threads: ConduitThreadsAPI | null = null;
+
+  /** Lazily-initialized users API wrapper. */
+  private _users: ConduitUsersAPI | null = null;
+
+  /** Lazily-initialized account API wrapper. */
+  private _account: ConduitAccountAPI | null = null;
+
   /** Configuration forwarded to the FCA layer on login. */
   private config: ConduitClientConfig;
 
@@ -77,9 +94,55 @@ export class ConduitClient {
    */
   constructor(config: ConduitClientConfig) {
     this._client = null;
-    this.config = config;
+    this.config = {
+      ...config,
+      logLevel: config.logLevel ?? "silent",
+    };
     this.middlewares = new Map();
     this.fanOutBound = false;
+  }
+
+  /**
+   * API for message operations.
+   *
+   * Provides methods for sending messages, replying to threads,
+   * reacting to messages, editing content, deleting messages,
+   * and other message-level interactions.
+   */
+  get messages(): ConduitMessagesAPI {
+    return (this._messages ??= new ConduitMessagesAPI(this.client));
+  }
+
+  /**
+   * API for thread management operations.
+   *
+   * Includes functionality for retrieving thread data,
+   * managing participants, updating thread metadata (such as title),
+   * and handling thread-level features like polls.
+   */
+  get threads(): ConduitThreadsAPI {
+    return (this._threads ??= new ConduitThreadsAPI(this.client));
+  }
+
+  /**
+   * API for user-related operations.
+   *
+   * Supports fetching user profiles, resolving user IDs,
+   * and accessing social graph data such as friends or connections.
+   */
+  get users(): ConduitUsersAPI {
+    return (this._users ??= new ConduitUsersAPI(this.client));
+  }
+
+  /**
+   * API for account-level operations.
+   *
+   * Exposes actions tied to the authenticated account such as
+   * retrieving the current user ID, managing friend requests,
+   * blocking users, and logging out.
+   */
+  get account(): ConduitAccountAPI {
+    return (this._account ??= new ConduitAccountAPI(this.client));
   }
 
   /**
@@ -155,6 +218,17 @@ export class ConduitClient {
   }
 
   /**
+   * Uses the raw legacy api. Not recommended as this do not
+   * have any type safety and auto-completion features. Use
+   * at your own risk.
+   *
+   * @returns The raw api context.
+   * */
+  public get api(): any {
+    return this.client.ctx.api;
+  }
+
+  /**
    * Translates a single Conduit event to its FCA equivalent and attaches a
    * listener that enriches the raw payload before running the middleware stack.
    *
@@ -174,15 +248,12 @@ export class ConduitClient {
    * This getter enforces the client lifecycle by ensuring that the underlying
    * FCA bot has been created via {@link login} before any access is allowed.
    *
-   * @throws {Error} If the client has not been initialized yet (login not called).
+   * @throws {ConduitError} If the client has not been initialized yet (login not called).
    * @returns {MessengerBot} The active Messenger bot instance.
    */
   private get client(): MessengerBot {
     if (this._client) return this._client;
-
-    throw new Error(
-      "Conduit client not yet initialized. Please call the .login(credentials) method",
-    );
+    throw ConduitError.uninitializedClient();
   }
 
   /**
@@ -234,23 +305,16 @@ export class ConduitClient {
     const messageID = raw.messageID;
 
     const sendable = {
-      send: (body: string) =>
-        this.client.ctx.api.sendMessage({ body }, threadID),
+      send: (body: string) => this.messages.send(body, threadID),
     };
 
     if (event.startsWith("message:")) {
       return {
         ...raw,
         ...sendable,
-        reply: (body: string) =>
-          this.client.ctx.api.sendMessage(
-            { body },
-            threadID,
-            undefined,
-            messageID,
-          ),
+        reply: (body: string) => this.messages.reply(body, threadID, messageID),
         react: (emoji: string) =>
-          this.client.ctx.api.setMessageReaction(emoji, messageID, threadID),
+          this.messages.react(emoji, messageID, threadID),
       };
     }
 

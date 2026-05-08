@@ -1,5 +1,5 @@
 {
-  "name": "conduit",
+  "name": "@theophilusdev/conduit",
   "description": "A simple FCA wrapper library with typescript support",
   "version": "1.0.0",
   "type": "module",
