@@ -64,11 +64,11 @@ export class ConduitClient {
     });
   }
 
-  private async runStack(stack: Middleware<any>[], payload: any) {
+  private async runStack(stack: Middleware<keyof ConduitEvents>[], data: any) {
     let i = 0;
     const next = async () => {
       if (i < stack.length) {
-        await stack[i++](payload, next);
+        await stack[i++](data as never, next);
       }
     };
     await next();

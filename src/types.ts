@@ -46,7 +46,18 @@ export interface Message {
   body: string;
   attachments: any[];
   mentions: Record<string, string>;
-  timestamp: number;
+  timestamp: string;
+  participantIDs: string[];
+}
+
+/**
+ * Base shape shared across all thread events fanned out from FCA `threadUpdate`.
+ * All thread sub-events include at minimum these fields.
+ */
+export interface ThreadEventBase {
+  threadID: string;
+  /** The user who performed the action. */
+  author: string;
   participantIDs: string[];
 }
 
@@ -64,7 +75,7 @@ export interface MessageRespondPayload extends Message {
   messageReply: Message;
 }
 
-/** Emitted when a message is unsent. Maps to FCA `message_unsend`. */
+/** Emitted when a message is unsent by its sender. Maps to FCA `message_unsend`. */
 export interface MessageRemovePayload {
   threadID: string;
   messageID: string;
@@ -72,7 +83,7 @@ export interface MessageRemovePayload {
   deletionTimestamp: number;
 }
 
-/** Emitted when a reaction is added or removed. Maps to FCA `message_reaction`. */
+/** Emitted when a reaction is added or removed on a message. Maps to FCA `message_reaction`. */
 export interface MessageReactPayload {
   threadID: string;
   messageID: string;
@@ -97,14 +108,87 @@ export interface MessageReadPayload {
   time: string;
 }
 
+// ─── Thread Payloads ─────────────────────────────────────────────────────────
+
+/**
+ * Emitted on any thread metadata change. Catch-all for the raw FCA `threadUpdate` event.
+ * For specific changes, prefer the narrower `thread:*` events.
+ */
+export interface ThreadUpdatePayload extends ThreadEventBase {
+  logMessageType: string;
+  logMessageData: Record<string, any>;
+}
+
+/** Emitted when the group thread title is changed. Maps to FCA `threadUpdate` → `log:thread-name`. */
+export interface ThreadTitleChangePayload extends ThreadEventBase {
+  /** The new thread title. */
+  name: string;
+}
+
+/** Emitted when the group photo is changed. Maps to FCA `threadUpdate` → `log:thread-image`. */
+export interface ThreadPhotoReplacedPayload extends ThreadEventBase {
+  image: {
+    attachmentID: string;
+    width: number;
+    height: number;
+    url: string;
+  };
+  timestamp: string;
+}
+
+/** Emitted when the chat theme or color is changed. Maps to FCA `threadUpdate` → `log:thread-color`. */
+export interface ThreadThemeChangedPayload extends ThreadEventBase {
+  themeColor: string;
+  gradient: string;
+  themeID: string;
+  accessibilityLabel: string;
+  themeName: string;
+  themeEmoji: string;
+}
+
+/** Emitted when a participant's nickname is changed. Maps to FCA `threadUpdate` → `log:user-nickname`. */
+export interface ThreadNicknameChangedPayload extends ThreadEventBase {
+  /** The participant whose nickname was changed. */
+  participantID: string;
+  /** The new nickname. Empty string if cleared. */
+  nickname: string;
+}
+
+/** Emitted when a participant's admin status is changed. Maps to FCA `threadUpdate` → `log:thread-admins`. */
+export interface ThreadAdminChangedPayload extends ThreadEventBase {
+  /** The participant whose admin status changed. */
+  targetID: string;
+  /** Whether the participant was promoted or demoted. */
+  adminEvent: "add_admin" | "remove_admin";
+}
+
+// ─── User Payloads ────────────────────────────────────────────────────────────
+
+/** A participant added to a group thread. */
+export interface AddedParticipant {
+  fbid: string;
+  fullName: string;
+}
+
+/** Emitted when a user is added to a group thread. Maps to FCA `threadUpdate` → `log:subscribe`. */
+export interface UserCreatePayload extends ThreadEventBase {
+  addedParticipants: AddedParticipant[];
+}
+
+/** Emitted when a user is removed from or leaves a group thread. Maps to FCA `threadUpdate` → `log:unsubscribe`. */
+export interface UserRemovePayload extends ThreadEventBase {
+  /** The fbid of the participant who left or was removed. */
+  leftParticipantFbID: string;
+}
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 /**
  * All events emitted by the Conduit event bus.
  *
- * Thread sub-events (join, leave, title change, etc.) arrive as `"event"` from
+ * Thread sub-events (join, leave, title change, etc.) arrive as `threadUpdate` from
  * FCA with a `logMessageType` discriminant — Conduit fans those out into the
- * specific `thread:*` events below.
+ * specific `thread:*` and `user:*` events below.
  *
  * @see https://github.com/dongp06/fca-unofficial — Section 15: Events Reference
  */
@@ -112,69 +196,49 @@ export interface ConduitEvents {
   // ─── Message ──────────────────────────────────────────────────────────────
 
   /** A new message was received. Maps to FCA `message`. */
-  "message:create": (message: MessageCreatePayload) => Promise<any>;
+  "message:create": (data: MessageCreatePayload) => Promise<any>;
   /** A message was unsent by its sender. Maps to FCA `message_unsend`. */
-  "message:remove": (message: MessageRemovePayload) => Promise<any>;
+  "message:remove": (data: MessageRemovePayload) => Promise<any>;
   /** A reaction was added or removed on a message. Maps to FCA `message_reaction`. */
-  "message:react": (message: MessageReactPayload) => Promise<any>;
+  "message:react": (data: MessageReactPayload) => Promise<any>;
   /** A reply was sent to an existing message. Maps to FCA `message_reply`. */
-  "message:respond": (message: MessageRespondPayload) => Promise<any>;
+  "message:respond": (data: MessageRespondPayload) => Promise<any>;
   /** A user started or stopped typing. Maps to FCA `typ`. Requires `listenTyping: true`. */
-  "message:writing": (message: MessageWritingPayload) => Promise<any>;
+  "message:writing": (data: MessageWritingPayload) => Promise<any>;
   /** A thread or message was marked as read. Maps to FCA `read_receipt`. */
-  "message:read": (message: MessageReadPayload) => Promise<any>;
+  "message:read": (data: MessageReadPayload) => Promise<any>;
 
   // ─── User ─────────────────────────────────────────────────────────────────
 
-  /** A user joined a group thread. Maps to FCA `event` → `log:subscribe`. */
-  "user:create": () => Promise<any>;
-  /** A user's presence changed. Maps to FCA `presence`. Requires `updatePresence: true`. */
-  "user:presence": () => Promise<any>;
-  /** A user was removed from a group thread. Maps to FCA `event` → `log:unsubscribe`. */
-  "user:remove": () => Promise<any>;
+  /** A user was added to a group thread. Maps to FCA `threadUpdate` → `log:subscribe`. */
+  "user:create": (data: UserCreatePayload) => Promise<any>;
+  /** A user was removed from or left a group thread. Maps to FCA `threadUpdate` → `log:unsubscribe`. */
+  "user:remove": (data: UserRemovePayload) => Promise<any>;
 
   // ─── Thread ───────────────────────────────────────────────────────────────
 
-  /** Thread metadata changed (catch-all). Maps to FCA `threadUpdate`. */
-  "thread:update": () => Promise<any>;
-  /** The thread title was changed. Maps to FCA `event` → `log:thread-name`. */
-  "thread:title_change": () => Promise<any>;
-  /** The thread photo was changed. Maps to FCA `event` → `log:thread-image`. */
-  "thread:photo_replaced": () => Promise<any>;
-  /** The thread theme/color was changed. Maps to FCA `event` → `log:thread-color`. */
-  "thread:theme_changed": () => Promise<any>;
-  /** The thread emoji was changed. Maps to FCA `event` → `log:thread-icon`. */
-  "thread:emoji_changed": () => Promise<any>;
-  /** A participant's nickname was changed. Maps to FCA `event` → `log:user-nickname`. */
-  "thread:nickname_changed": () => Promise<any>;
-  /** A participant's admin status was changed. Maps to FCA `event` → `log:admin-text`. */
-  "thread:admin_changed": () => Promise<any>;
-
-  // ─── Client ───────────────────────────────────────────────────────────────
-
-  /** MQTT connection established. Maps to FCA `ready`. Requires `emitReady: true`. */
-  "client:ready": () => Promise<any>;
-  /** Session cookie is no longer valid. Maps to FCA `sessionExpired`. */
-  "client:session_expired": () => Promise<any>;
-  /** Facebook is requesting a security checkpoint. Maps to FCA `checkpoint`. */
-  "client:checkpoint": () => Promise<any>;
-  /** A request was rate-limited by Facebook. Maps to FCA `rateLimit`. */
-  "client:rate_limit": () => Promise<any>;
-  /** A network-level error occurred. Maps to FCA `networkError`. */
-  "client:network_error": () => Promise<any>;
-
-  // ─── Friend ───────────────────────────────────────────────────────────────
-
-  /** A friend request was received. Maps to FCA `friend_request_received`. */
-  "friend:request": () => Promise<any>;
-  /** A sent friend request was cancelled. Maps to FCA `friend_request_cancel`. */
-  "friend:request_cancel": () => Promise<any>;
+  /** Thread metadata changed (catch-all). Maps to raw FCA `threadUpdate`. */
+  "thread:update": (data: ThreadUpdatePayload) => Promise<any>;
+  /** The thread title was changed. Maps to FCA `threadUpdate` → `log:thread-name`. */
+  "thread:title_change": (data: ThreadTitleChangePayload) => Promise<any>;
+  /** The thread photo was changed. Maps to FCA `threadUpdate` → `log:thread-image`. */
+  "thread:photo_replaced": (data: ThreadPhotoReplacedPayload) => Promise<any>;
+  /** The thread theme/color was changed. Maps to FCA `threadUpdate` → `log:thread-color`. */
+  "thread:theme_changed": (data: ThreadThemeChangedPayload) => Promise<any>;
+  /** A participant's nickname was changed. Maps to FCA `threadUpdate` → `log:user-nickname`. */
+  "thread:nickname_changed": (
+    data: ThreadNicknameChangedPayload,
+  ) => Promise<any>;
+  /** A participant's admin status was changed. Maps to FCA `threadUpdate` → `log:thread-admins`. */
+  "thread:admin_changed": (data: ThreadAdminChangedPayload) => Promise<any>;
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 /** A middleware function for a specific Conduit event. */
 export type Middleware<K extends keyof ConduitEvents> = (
-  message: Parameters<ConduitEvents[K]>[0],
+  data: Parameters<ConduitEvents[K]> extends [infer First, ...any[]]
+    ? First
+    : never,
   next: () => Promise<void>,
 ) => Promise<void>;
