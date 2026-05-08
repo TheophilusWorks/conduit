@@ -263,5 +263,5 @@ export type Middleware<K extends keyof ConduitEvents> = (
   data: Parameters<ConduitEvents[K]> extends [infer First, ...any[]]
     ? First
     : never,
-  next: () => Promise<void>,
+  next?: () => Promise<void>,
 ) => Promise<void>;
