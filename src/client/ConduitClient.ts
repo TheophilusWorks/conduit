@@ -3,6 +3,7 @@ import {
   ConduitClientConfig,
   ConduitCredentials,
   ConduitEvents,
+  ConduitMessageBody,
   Middleware,
 } from "../types.js";
 import { toFcaEvent } from "../utils/toFcaEvent.js";
@@ -11,6 +12,7 @@ import { ConduitMessagesAPI } from "../api/ConduitMessagesAPI.js";
 import { ConduitThreadsAPI } from "../api/ConduitThreadsAPI.js";
 import { ConduitUsersAPI } from "../api/ConduitUsersAPI.js";
 import { ConduitAccountAPI } from "../api/ConduitAccountAPI.js";
+import { isAnyArrayBuffer } from "node:util/types";
 
 /**
  * Set of Conduit events that are dispatched via the fan-out mechanism,
@@ -305,16 +307,31 @@ export class ConduitClient {
     const messageID = raw.messageID;
 
     const sendable = {
-      send: (body: string) => this.messages.send(body, threadID),
+      send: (body: string | ConduitMessageBody) =>
+        this.messages.send(body, threadID),
     };
 
-    if (event.startsWith("message:")) {
+    if (event.startsWith("message:") || event === "user:create") {
       return {
         ...raw,
         ...sendable,
-        reply: (body: string) => this.messages.reply(body, threadID, messageID),
+        reply: (body: string | ConduitMessageBody) =>
+          this.messages.reply(body, threadID, messageID),
         react: (emoji: string) =>
           this.messages.react(emoji, messageID, threadID),
+      };
+    }
+
+    if (event.startsWith("thread:")) {
+      return {
+        ...raw,
+        ...sendable,
+        changeNickname: (nickname: string, userId: string) => {
+          this.threads.changeNickname(nickname, threadID, userId);
+        },
+        changeAdminStatus: (userID: string, isAdmin: boolean) => {
+          this.threads.changeAdminStatus(userID, threadID, isAdmin);
+        },
       };
     }
 
@@ -328,6 +345,7 @@ export class ConduitClient {
    * @param stack - Ordered array of middleware functions to execute.
    * @param data - The enriched event payload threaded through the stack.
    */
+
   private async runStack(stack: Middleware<keyof ConduitEvents>[], data: any) {
     let i = 0;
     const next = async () => {
