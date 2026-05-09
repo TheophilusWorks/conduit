@@ -124,11 +124,11 @@ export class ConduitMessagesAPI {
       this.bot.ctx.api.setMessageReaction(
         emoji,
         messageID,
+        threadID,
         (err: any) => {
           if (err) reject(err);
           else resolve(null);
         },
-        threadID,
       );
     });
   }

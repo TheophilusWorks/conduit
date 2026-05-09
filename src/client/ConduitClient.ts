@@ -29,6 +29,11 @@ const FANOUT_EVENTS = new Set<keyof ConduitEvents>([
   "thread:admin_changed",
 ]);
 
+const MESSAGE_REPLYABLE = new Set<keyof ConduitEvents>([
+  "message:create",
+  "message:respond",
+]);
+
 /**
  * Maps FCA `logMessageType` strings to their corresponding Conduit event keys.
  * Used during fan-out to route `threadUpdate` payloads to the correct event stack.
@@ -164,6 +169,7 @@ export class ConduitClient {
       },
       this.config,
     );
+    
     return this;
   }
 
@@ -311,7 +317,7 @@ export class ConduitClient {
         this.messages.send(body, threadID),
     };
 
-    if (event.startsWith("message:") || event === "user:create") {
+    if (MESSAGE_REPLYABLE.has(event)) {
       return {
         ...raw,
         ...sendable,
@@ -322,7 +328,7 @@ export class ConduitClient {
       };
     }
 
-    if (event.startsWith("thread:")) {
+    if (event.startsWith("thread:") || event === "user:create") {
       return {
         ...raw,
         ...sendable,
