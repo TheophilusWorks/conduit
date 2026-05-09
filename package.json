@@ -1,7 +1,7 @@
 {
   "name": "@theophilusdev/conduit",
   "description": "A simple FCA wrapper library with typescript support",
-  "version": "1.0.2",
+  "version": "1.1.2",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",

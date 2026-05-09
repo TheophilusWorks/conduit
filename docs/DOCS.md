@@ -78,7 +78,7 @@ client.onFca(event: string, ...middlewares): this
 
 ### `.api`
 
-Direct access to the raw FCA API.
+Direct access to the raw FCA API. No type safety — use as a last resort.
 
 ```ts
 client.api.getThreadList(10, null, ["INBOX"]);
@@ -100,20 +100,38 @@ Handles message-level operations.
 
 ### `.send(body, threadID)`
 
-Sends a plain text message to a thread.
+Sends a message to a thread. Accepts a plain string or a `ConduitMessageBody` for rich messages.
 
 ```ts
 await client.messages.send("hello", threadID);
+
+await client.messages.send(
+  {
+    body: "hey @user",
+    mentions: [{ tag: "@user", id: "uid", fromIndex: 4 }],
+    attachment: [stream],
+  },
+  threadID,
+);
 ```
 
 ---
 
 ### `.reply(body, threadID, messageID)`
 
-Sends a reply to a specific message.
+Sends a quoted reply to a specific message. Accepts a plain string or a `ConduitMessageBody`.
 
 ```ts
 await client.messages.reply("got it", threadID, messageID);
+
+await client.messages.reply(
+  {
+    body: "got it",
+    attachment: [stream],
+  },
+  threadID,
+  messageID,
+);
 ```
 
 ---
@@ -395,11 +413,11 @@ await client.threads.delete(threadID);
 
 ### `.mute(threadID, muteUntil)`
 
-Mutes or unmutes a thread.
+Mutes or unmutes a thread. Pass `-1` to mute indefinitely, `0` to unmute.
 
 ```ts
-await client.threads.mute(threadID, -1);
-await client.threads.mute(threadID, 0);
+await client.threads.mute(threadID, -1); // mute forever
+await client.threads.mute(threadID, 0); // unmute
 ```
 
 ---
@@ -426,7 +444,7 @@ client.users;
 
 ### `.getInfo(userID)`
 
-Fetches user info.
+Fetches user info. Accepts a single ID or an array.
 
 ```ts
 const user = await client.users.getInfo("uid");
@@ -437,7 +455,7 @@ const users = await client.users.getInfo(["uid1", "uid2"]);
 
 ### `.getID(vanity)`
 
-Resolves username to ID.
+Resolves a vanity username to a Facebook user ID.
 
 ```ts
 const id = await client.users.getID("zuck");
@@ -447,7 +465,7 @@ const id = await client.users.getID("zuck");
 
 ### `.getFriendsList()`
 
-Returns friends list.
+Returns the authenticated user's friends list.
 
 ```ts
 const friends = await client.users.getFriendsList();
@@ -467,7 +485,7 @@ client.account;
 
 ### `.getCurrentUserID()`
 
-Returns current user ID.
+Returns current user ID. Synchronous.
 
 ```ts
 const myID = client.account.getCurrentUserID();
@@ -480,14 +498,15 @@ const myID = client.account.getCurrentUserID();
 Blocks or unblocks a user.
 
 ```ts
-await client.account.blockUser(userID, true);
+await client.account.blockUser(userID, true); // block
+await client.account.blockUser(userID, false); // unblock
 ```
 
 ---
 
 ### `.handleFriendRequest(userID, accept)`
 
-Handles friend requests.
+Accepts or declines a friend request.
 
 ```ts
 await client.account.handleFriendRequest(userID, true);
@@ -497,7 +516,7 @@ await client.account.handleFriendRequest(userID, true);
 
 ### `.unfriend(userID)`
 
-Removes a friend.
+Removes a user from the friends list.
 
 ```ts
 await client.account.unfriend(userID);
@@ -507,7 +526,7 @@ await client.account.unfriend(userID);
 
 ### `.logout()`
 
-Logs out of the session.
+Ends the session and invalidates cookies.
 
 ```ts
 await client.account.logout();
@@ -527,6 +546,20 @@ interface ConduitCredentials {
     email: string;
     password: string;
   };
+}
+```
+
+---
+
+### `ConduitMessageBody`
+
+Used by `send()` and `reply()` for rich messages with attachments and mentions.
+
+```ts
+interface ConduitMessageBody {
+  body?: string;
+  mentions?: { tag: string; id: string; fromIndex: number }[];
+  attachment?: any[];
 }
 ```
 

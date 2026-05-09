@@ -1,4 +1,5 @@
 import { MessengerBot } from "@dongdev/fca-unofficial";
+import { ConduitMessageBody } from "../types.js";
 
 /**
  * Provides message-related API methods wrapping the underlying FCA client.
@@ -12,8 +13,26 @@ export class ConduitMessagesAPI {
    * @param body - The message text.
    * @param threadID - The target thread ID.
    */
-  send(body: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.sendMessage({ body }, threadID);
+  send(body: string | ConduitMessageBody, threadID: string): Promise<any> {
+    if (typeof body === "string") {
+      return new Promise((resolve, reject) => {
+        this.bot.ctx.api.sendMessage(
+          { body },
+          threadID,
+          (err: any, data: any) => {
+            if (err) reject(err);
+            else resolve(data);
+          },
+        );
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.sendMessage(body, threadID, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -22,13 +41,36 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    * @param messageID - The message ID to reply to.
    */
-  reply(body: string, threadID: string, messageID: string): Promise<any> {
-    return this.bot.ctx.api.sendMessage(
-      { body },
-      threadID,
-      undefined,
-      messageID,
-    );
+  reply(
+    body: string | ConduitMessageBody,
+    threadID: string,
+    messageID: string,
+  ): Promise<any> {
+    if (typeof body === "string") {
+      return new Promise((resolve, reject) => {
+        this.bot.ctx.api.sendMessage(
+          { body },
+          threadID,
+          (err: any, data: any) => {
+            if (err) reject(err);
+            else resolve(data);
+          },
+          messageID,
+        );
+      });
+    }
+
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.sendMessage(
+        body,
+        threadID,
+        (err: any, data: any) => {
+          if (err) reject(err);
+          else resolve(data);
+        },
+        messageID,
+      );
+    });
   }
 
   /**
@@ -37,7 +79,12 @@ export class ConduitMessagesAPI {
    * @param body - The new message text.
    */
   edit(messageID: string, body: string): Promise<any> {
-    return this.bot.ctx.api.editMessage(body, messageID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.editMessage(body, messageID, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -45,7 +92,12 @@ export class ConduitMessagesAPI {
    * @param messageID - The message ID to unsend.
    */
   unsend(messageID: string): Promise<any> {
-    return this.bot.ctx.api.unsendMessage(messageID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.unsendMessage(messageID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -53,7 +105,12 @@ export class ConduitMessagesAPI {
    * @param messageID - The message ID to delete.
    */
   delete(messageID: string): Promise<any> {
-    return this.bot.ctx.api.deleteMessage(messageID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.deleteMessage(messageID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -63,7 +120,17 @@ export class ConduitMessagesAPI {
    * @param threadID - The thread the message belongs to.
    */
   react(emoji: string, messageID: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.setMessageReaction(emoji, messageID, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.setMessageReaction(
+        emoji,
+        messageID,
+        (err: any) => {
+          if (err) reject(err);
+          else resolve(null);
+        },
+        threadID,
+      );
+    });
   }
 
   /**
@@ -71,7 +138,12 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    */
   sendTypingIndicator(threadID: string): Promise<any> {
-    return this.bot.ctx.api.sendTypingIndicator(threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.sendTypingIndicator(threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -79,7 +151,12 @@ export class ConduitMessagesAPI {
    * @param messageID - The message ID to mark as read.
    */
   markAsRead(messageID: string): Promise<any> {
-    return this.bot.ctx.api.markAsRead(messageID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.markAsRead(messageID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -87,7 +164,12 @@ export class ConduitMessagesAPI {
    * @param file - A readable stream or file buffer.
    */
   uploadAttachment(file: any): Promise<any> {
-    return this.bot.ctx.api.uploadAttachment(file);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.uploadAttachment(file, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -96,7 +178,12 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    */
   forwardAttachment(attachmentID: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.forwardAttachment(attachmentID, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.forwardAttachment(attachmentID, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -105,7 +192,12 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    */
   shareContact(userID: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.shareContact(userID, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.shareContact(userID, threadID, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -114,7 +206,12 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    */
   changeThreadColor(color: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.changeThreadColor(color, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.changeThreadColor(color, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -123,7 +220,12 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    */
   changeThreadEmoji(emoji: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.changeThreadEmoji(emoji, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.changeThreadEmoji(emoji, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -131,13 +233,23 @@ export class ConduitMessagesAPI {
    * @param messageID - The message ID to fetch.
    */
   getMessage(messageID: string): Promise<any> {
-    return this.bot.ctx.api.getMessage(messageID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getMessage(messageID, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
    * Returns all available thread color themes.
    */
   getThreadColors(): Promise<any> {
-    return this.bot.ctx.api.getThreadColors();
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getThreadColors((err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 }

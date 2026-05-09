@@ -20,7 +20,12 @@ export class ConduitAccountAPI {
    * @param block - `true` to block, `false` to unblock.
    */
   blockUser(userID: string, block: boolean): Promise<any> {
-    return this.bot.ctx.api.changeBlockedStatus(userID, block);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.changeBlockedStatus(userID, block, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -29,7 +34,12 @@ export class ConduitAccountAPI {
    * @param accept - `true` to accept, `false` to decline.
    */
   handleFriendRequest(userID: string, accept: boolean): Promise<any> {
-    return this.bot.ctx.api.handleFriendRequest(userID, accept);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.handleFriendRequest(userID, accept, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -37,13 +47,23 @@ export class ConduitAccountAPI {
    * @param userID - The target user ID.
    */
   unfriend(userID: string): Promise<any> {
-    return this.bot.ctx.api.unfriend(userID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.unfriend(userID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
    * Ends the current session and invalidates cookies.
    */
   logout(): Promise<any> {
-    return this.bot.ctx.api.logout();
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.logout((err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 }

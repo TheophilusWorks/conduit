@@ -12,7 +12,12 @@ export class ConduitThreadsAPI {
    * @param threadID - The thread ID to query.
    */
   getInfo(threadID: string): Promise<any> {
-    return this.bot.ctx.api.getThreadInfo(threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getThreadInfo(threadID, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -22,7 +27,17 @@ export class ConduitThreadsAPI {
    * @param folders - Folder filters e.g. `["INBOX"]`.
    */
   getList(limit: number, cursor: any, folders: string[]): Promise<any> {
-    return this.bot.ctx.api.getThreadList(limit, cursor, folders);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getThreadList(
+        limit,
+        cursor,
+        folders,
+        (err: any, data: any) => {
+          if (err) reject(err);
+          else resolve(data);
+        },
+      );
+    });
   }
 
   /**
@@ -31,7 +46,17 @@ export class ConduitThreadsAPI {
    * @param limit - Number of messages to return.
    */
   getHistory(threadID: string, limit: number): Promise<any> {
-    return this.bot.ctx.api.getThreadHistory(threadID, limit);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getThreadHistory(
+        threadID,
+        limit,
+        undefined,
+        (err: any, data: any) => {
+          if (err) reject(err);
+          else resolve(data);
+        },
+      );
+    });
   }
 
   /**
@@ -39,7 +64,12 @@ export class ConduitThreadsAPI {
    * @param query - The search query string.
    */
   search(query: string): Promise<any> {
-    return this.bot.ctx.api.searchForThread(query);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.searchForThread(query, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -48,7 +78,12 @@ export class ConduitThreadsAPI {
    * @param name - Optional group name.
    */
   createGroup(userIDs: string[], name?: string): Promise<any> {
-    return this.bot.ctx.api.createNewGroup(userIDs, name);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.createNewGroup(userIDs, name, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
@@ -57,7 +92,12 @@ export class ConduitThreadsAPI {
    * @param threadID - The target group thread ID.
    */
   addUser(userID: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.addUserToGroup(userID, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.addUserToGroup(userID, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -66,7 +106,12 @@ export class ConduitThreadsAPI {
    * @param threadID - The target group thread ID.
    */
   removeUser(userID: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.removeUserFromGroup(userID, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.removeUserFromGroup(userID, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -80,7 +125,17 @@ export class ConduitThreadsAPI {
     threadID: string,
     admin: boolean,
   ): Promise<any> {
-    return this.bot.ctx.api.changeAdminStatus(userID, threadID, admin);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.changeAdminStatus(
+        userID,
+        threadID,
+        admin,
+        (err: any) => {
+          if (err) reject(err);
+          else resolve(null);
+        },
+      );
+    });
   }
 
   /**
@@ -89,7 +144,12 @@ export class ConduitThreadsAPI {
    * @param threadID - The target group thread ID.
    */
   changeGroupImage(image: any, threadID: string): Promise<any> {
-    return this.bot.ctx.api.changeGroupImage(image, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.changeGroupImage(image, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -103,7 +163,17 @@ export class ConduitThreadsAPI {
     threadID: string,
     userID: string,
   ): Promise<any> {
-    return this.bot.ctx.api.changeNickname(nickname, threadID, userID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.changeNickname(
+        nickname,
+        threadID,
+        userID,
+        (err: any) => {
+          if (err) reject(err);
+          else resolve(null);
+        },
+      );
+    });
   }
 
   /**
@@ -112,7 +182,12 @@ export class ConduitThreadsAPI {
    * @param threadID - The target group thread ID.
    */
   setTitle(title: string, threadID: string): Promise<any> {
-    return this.bot.ctx.api.setTitle(title, threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.setTitle(title, threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -122,7 +197,17 @@ export class ConduitThreadsAPI {
    * @param options - Array of answer options.
    */
   createPoll(title: string, threadID: string, options: string[]): Promise<any> {
-    return this.bot.ctx.api.createPoll(title, threadID, options);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.createPoll(
+        title,
+        threadID,
+        options,
+        (err: any, data: any) => {
+          if (err) reject(err);
+          else resolve(data);
+        },
+      );
+    });
   }
 
   /**
@@ -130,7 +215,12 @@ export class ConduitThreadsAPI {
    * @param threadID - The thread ID to delete.
    */
   delete(threadID: string): Promise<any> {
-    return this.bot.ctx.api.deleteThread(threadID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.deleteThread(threadID, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -139,7 +229,12 @@ export class ConduitThreadsAPI {
    * @param muteUntil - Timestamp (ms) to mute until. Pass `-1` to mute indefinitely, `0` to unmute.
    */
   mute(threadID: string, muteUntil: number): Promise<any> {
-    return this.bot.ctx.api.muteThread(threadID, muteUntil);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.muteThread(threadID, muteUntil, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 
   /**
@@ -148,6 +243,11 @@ export class ConduitThreadsAPI {
    * @param accept - `true` to accept, `false` to decline.
    */
   handleMessageRequest(threadID: string, accept: boolean): Promise<any> {
-    return this.bot.ctx.api.handleMessageRequest(threadID, accept);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.handleMessageRequest(threadID, accept, (err: any) => {
+        if (err) reject(err);
+        else resolve(null);
+      });
+    });
   }
 }

@@ -256,6 +256,43 @@ export interface ConduitEvents {
   "thread:admin_changed": (data: ThreadAdminChangedPayload) => Promise<any>;
 }
 
+/**
+ * Message object passed to `api.sendMessage()`.
+ * At least one of `body`, `attachment`, `url`, or `sticker` should be provided.
+ */
+export interface ConduitMessageBody {
+  /** The text content of the message. */
+  body?: string;
+
+  /** A readable stream or array of streams to send as attachments. */
+  attachment?: NodeJS.ReadableStream | NodeJS.ReadableStream[];
+
+  /** A URL to share in the message. */
+  url?: string;
+
+  /** A sticker ID to send. */
+  sticker?: string;
+
+  /** An emoji to send as the message. */
+  emoji?: string;
+
+  /** The size of the emoji. Defaults to `"small"` if not specified. */
+  emojiSize?: "small" | "medium" | "large";
+
+  /**
+   * An array of user mentions embedded in the message body.
+   * Each mention must correspond to a substring in `body`.
+   */
+  mentions?: Array<{
+    /** The text in `body` to highlight as the mention (e.g. `"@John"`). */
+    tag: string;
+    /** The Facebook user ID of the mentioned user. */
+    id: string;
+    /** The character index in `body` where the mention starts. */
+    fromIndex?: number;
+  }>;
+}
+
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
 /** A middleware function for a specific Conduit event. */

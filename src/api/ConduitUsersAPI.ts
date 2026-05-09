@@ -12,7 +12,15 @@ export class ConduitUsersAPI {
    * @param userID - A single user ID or an array of user IDs.
    */
   getInfo(userID: string | string[]): Promise<any> {
-    return this.bot.ctx.api.getUserInfo(userID);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getUserInfo(
+        Array.isArray(userID) ? userID : [userID],
+        (err: any, data: any) => {
+          if (err) reject(err);
+          else resolve(data);
+        },
+      );
+    });
   }
 
   /**
@@ -20,13 +28,23 @@ export class ConduitUsersAPI {
    * @param vanity - The vanity name or profile URL slug.
    */
   getID(vanity: string): Promise<any> {
-    return this.bot.ctx.api.getUserID(vanity);
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getUserID(vanity, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 
   /**
    * Returns the authenticated user's friends list.
    */
   getFriendsList(): Promise<any> {
-    return this.bot.ctx.api.getFriendsList();
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getFriendsList((err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
   }
 }

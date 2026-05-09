@@ -72,12 +72,14 @@ Handlers receive a context object and an optional `next()` function for middlewa
 
 All events include:
 
-- `send(body)`
+- `send(body)` — send a message to the same thread
 
 Message events additionally include:
 
-- `reply(body)`
-- `react(emoji)`
+- `reply(body)` — quoted reply to the triggering message
+- `react(emoji)` — react to the triggering message
+
+Both `send()` and `reply()` accept a plain string or a `ConduitMessageBody` object for rich messages with attachments and mentions.
 
 ### Message Events
 
