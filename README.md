@@ -25,8 +25,9 @@ npm install @theophilusdev/conduit
 
 ```ts
 import { ConduitClient } from "@theophilusdev/conduit";
-import appstate from "./appstate.json" assert { type: "json" };
+import fs from "fs";
 
+const appstate = fs.readFileSync("./appstate.json", "utf-8");
 const client = new ConduitClient({ listenEvents: true });
 
 await client.login({ appstate });
