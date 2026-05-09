@@ -1,11 +1,15 @@
 import { MessengerBot } from "@dongdev/fca-unofficial";
+import { ConduitQueue } from "../utils/ConduitQueue.js";
 
 /**
  * Provides thread-related API methods wrapping the underlying FCA client.
  * Accessible via `client.threads`.
  */
 export class ConduitThreadsAPI {
-  constructor(private readonly bot: MessengerBot) {}
+  constructor(
+    private readonly bot: MessengerBot,
+    private readonly queue?: ConduitQueue,
+  ) {}
 
   /**
    * Fetches detailed info about a thread.
@@ -163,17 +167,20 @@ export class ConduitThreadsAPI {
     threadID: string,
     userID: string,
   ): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.bot.ctx.api.changeNickname(
-        nickname,
-        threadID,
-        userID,
-        (err: any) => {
-          if (err) reject(err);
-          else resolve(null);
-        },
-      );
-    });
+    const fn = () =>
+      new Promise((resolve, reject) => {
+        this.bot.ctx.api.changeNickname(
+          nickname,
+          threadID,
+          userID,
+          (err: any) => {
+            if (err) reject(err);
+            else resolve(null);
+          },
+        );
+      });
+
+    return this.queue ? this.queue.enqueue(threadID, fn) : fn();
   }
 
   /**
@@ -182,12 +189,15 @@ export class ConduitThreadsAPI {
    * @param threadID - The target group thread ID.
    */
   setTitle(title: string, threadID: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.bot.ctx.api.setTitle(title, threadID, (err: any) => {
-        if (err) reject(err);
-        else resolve(null);
+    const fn = () =>
+      new Promise((resolve, reject) => {
+        this.bot.ctx.api.setTitle(title, threadID, (err: any) => {
+          if (err) reject(err);
+          else resolve(null);
+        });
       });
-    });
+
+    return this.queue ? this.queue.enqueue(threadID, fn) : fn();
   }
 
   /**
@@ -197,17 +207,20 @@ export class ConduitThreadsAPI {
    * @param options - Array of answer options.
    */
   createPoll(title: string, threadID: string, options: string[]): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.bot.ctx.api.createPoll(
-        title,
-        threadID,
-        options,
-        (err: any, data: any) => {
-          if (err) reject(err);
-          else resolve(data);
-        },
-      );
-    });
+    const fn = () =>
+      new Promise((resolve, reject) => {
+        this.bot.ctx.api.createPoll(
+          title,
+          threadID,
+          options,
+          (err: any, data: any) => {
+            if (err) reject(err);
+            else resolve(data);
+          },
+        );
+      });
+
+    return this.queue ? this.queue.enqueue(threadID, fn) : fn();
   }
 
   /**

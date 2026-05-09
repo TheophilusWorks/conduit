@@ -536,6 +536,17 @@ await client.account.logout();
 
 ## Types
 
+### ConduitClientConfig
+
+```ts
+interface ConduitClientConfig extends MessengerBotOptions {
+  queue?: {
+    messageQueue?: ConduitQueueConfig;
+    threadQueue?: ConduitQueueConfig;
+  };
+}
+```
+
 ### `ConduitCredentials`
 
 ```ts

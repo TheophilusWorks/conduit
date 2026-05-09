@@ -4,6 +4,7 @@ import {
   ConduitCredentials,
   ConduitEvents,
   ConduitMessageBody,
+  ConduitQueueConfig,
   Middleware,
 } from "../types.js";
 import { toFcaEvent } from "../utils/toFcaEvent.js";
@@ -12,12 +13,8 @@ import { ConduitMessagesAPI } from "../api/ConduitMessagesAPI.js";
 import { ConduitThreadsAPI } from "../api/ConduitThreadsAPI.js";
 import { ConduitUsersAPI } from "../api/ConduitUsersAPI.js";
 import { ConduitAccountAPI } from "../api/ConduitAccountAPI.js";
-import { isAnyArrayBuffer } from "node:util/types";
+import { ConduitQueue } from "../utils/ConduitQueue.js";
 
-/**
- * Set of Conduit events that are dispatched via the fan-out mechanism,
- * meaning they are all sourced from a single underlying `threadUpdate` FCA event.
- */
 const FANOUT_EVENTS = new Set<keyof ConduitEvents>([
   "user:create",
   "user:remove",
@@ -34,10 +31,6 @@ const MESSAGE_REPLYABLE = new Set<keyof ConduitEvents>([
   "message:respond",
 ]);
 
-/**
- * Maps FCA `logMessageType` strings to their corresponding Conduit event keys.
- * Used during fan-out to route `threadUpdate` payloads to the correct event stack.
- */
 const LOG_MESSAGE_TYPE_MAP: Record<string, keyof ConduitEvents> = {
   "log:subscribe": "user:create",
   "log:unsubscribe": "user:remove",
@@ -56,7 +49,7 @@ const LOG_MESSAGE_TYPE_MAP: Record<string, keyof ConduitEvents> = {
  * ```ts
  * const conduit = new ConduitClient(config);
  * await conduit.login(credentials);
- * conduit.on("message:text", async (ctx, next) => {
+ * conduit.on("message:create", async (ctx, next) => {
  *   console.log(ctx.body);
  *   await next();
  * });
@@ -77,6 +70,12 @@ export class ConduitClient {
 
   /** Lazily-initialized account API wrapper. */
   private _account: ConduitAccountAPI | null = null;
+
+  /** Lazily-initialized queue for message operations. */
+  private _messageQueue: ConduitQueue | null = null;
+
+  /** Lazily-initialized queue for thread operations. */
+  private _threadQueue: ConduitQueue | null = null;
 
   /** Configuration forwarded to the FCA layer on login. */
   private config: ConduitClientConfig;
@@ -117,7 +116,10 @@ export class ConduitClient {
    * and other message-level interactions.
    */
   get messages(): ConduitMessagesAPI {
-    return (this._messages ??= new ConduitMessagesAPI(this.client));
+    return (this._messages ??= new ConduitMessagesAPI(
+      this.client,
+      this.config.queue?.messageQueue ? this.messageQueue : undefined,
+    ));
   }
 
   /**
@@ -128,7 +130,10 @@ export class ConduitClient {
    * and handling thread-level features like polls.
    */
   get threads(): ConduitThreadsAPI {
-    return (this._threads ??= new ConduitThreadsAPI(this.client));
+    return (this._threads ??= new ConduitThreadsAPI(
+      this.client,
+      this.config.queue?.threadQueue ? this.threadQueue : undefined,
+    ));
   }
 
   /**
@@ -153,6 +158,26 @@ export class ConduitClient {
   }
 
   /**
+   * Lazily-initialized queue for message operations.
+   * Only created when `config.queue.messageQueue` is defined.
+   */
+  private get messageQueue(): ConduitQueue {
+    return (this._messageQueue ??= new ConduitQueue(
+      this.config.queue?.messageQueue ?? ({} as ConduitQueueConfig),
+    ));
+  }
+
+  /**
+   * Lazily-initialized queue for thread operations.
+   * Only created when `config.queue.threadQueue` is defined.
+   */
+  private get threadQueue(): ConduitQueue {
+    return (this._threadQueue ??= new ConduitQueue(
+      this.config.queue?.threadQueue ?? ({} as ConduitQueueConfig),
+    ));
+  }
+
+  /**
    * Authenticates with Messenger and initialises the underlying FCA bot.
    * Must be called before any events can be received.
    *
@@ -169,7 +194,6 @@ export class ConduitClient {
       },
       this.config,
     );
-    
     return this;
   }
 
@@ -226,12 +250,10 @@ export class ConduitClient {
   }
 
   /**
-   * Uses the raw legacy api. Not recommended as this do not
-   * have any type safety and auto-completion features. Use
-   * at your own risk.
+   * Direct access to the raw FCA API. No type safety — use as a last resort.
    *
-   * @returns The raw api context.
-   * */
+   * @returns The raw FCA API context.
+   */
   public get api(): any {
     return this.client.ctx.api;
   }
@@ -256,7 +278,7 @@ export class ConduitClient {
    * This getter enforces the client lifecycle by ensuring that the underlying
    * FCA bot has been created via {@link login} before any access is allowed.
    *
-   * @throws {ConduitError} If the client has not been initialized yet (login not called).
+   * @throws {ConduitError} If the client has not been initialized yet.
    * @returns {MessengerBot} The active Messenger bot instance.
    */
   private get client(): MessengerBot {
@@ -269,8 +291,8 @@ export class ConduitClient {
    * relevant Conduit events based on the incoming `logMessageType`.
    *
    * `thread:update` always fires with the raw payload when its stack is
-   * non-empty. Specific sub-events (e.g. `thread:title_change`) fire only
-   * when their stack is also non-empty and a matching `logMessageType` exists.
+   * non-empty. Specific sub-events fire only when their stack is also
+   * non-empty and a matching `logMessageType` exists.
    *
    * Calling this method more than once is a no-op.
    */
@@ -328,16 +350,18 @@ export class ConduitClient {
       };
     }
 
-    if (event.startsWith("thread:") || event === "user:create") {
+    if (
+      event.startsWith("thread:") ||
+      event === "user:create" ||
+      event === "user:remove"
+    ) {
       return {
         ...raw,
         ...sendable,
-        changeNickname: (nickname: string, userId: string) => {
-          this.threads.changeNickname(nickname, threadID, userId);
-        },
-        changeAdminStatus: (userID: string, isAdmin: boolean) => {
-          this.threads.changeAdminStatus(userID, threadID, isAdmin);
-        },
+        changeNickname: (nickname: string, userID: string) =>
+          this.threads.changeNickname(nickname, threadID, userID),
+        changeAdminStatus: (userID: string, isAdmin: boolean) =>
+          this.threads.changeAdminStatus(userID, threadID, isAdmin),
       };
     }
 
@@ -351,7 +375,6 @@ export class ConduitClient {
    * @param stack - Ordered array of middleware functions to execute.
    * @param data - The enriched event payload threaded through the stack.
    */
-
   private async runStack(stack: Middleware<keyof ConduitEvents>[], data: any) {
     let i = 0;
     const next = async () => {

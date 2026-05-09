@@ -11,7 +11,12 @@ export type Loose = string & {};
 // ─── Config & Credentials ─────────────────────────────────────────────────────
 
 /** Configuration options for the Conduit client. Extends {@link MessengerBotOptions}. */
-export interface ConduitClientConfig extends MessengerBotOptions {}
+export interface ConduitClientConfig extends MessengerBotOptions {
+  queue?: {
+    messageQueue?: ConduitQueueConfig;
+    threadQueue?: ConduitQueueConfig;
+  };
+}
 
 /**
  * Credentials used to authenticate the Conduit client with Facebook.
@@ -302,3 +307,13 @@ export type Middleware<K extends keyof ConduitEvents> = (
     : never,
   next?: () => Promise<void>,
 ) => Promise<void>;
+
+// ─── Queue ───────────────────────────────────────────────────────────────
+
+export type ConduitQueueJob<T> = () => Promise<T>;
+export interface ConduitQueueConfig {
+  minDelayMs: number;
+  maxDelayMs: number;
+  switchDelayMinMs?: number;
+  switchDelayMaxMs?: number;
+}

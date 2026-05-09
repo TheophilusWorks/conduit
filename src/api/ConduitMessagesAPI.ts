@@ -1,12 +1,17 @@
 import { MessengerBot } from "@dongdev/fca-unofficial";
 import { ConduitMessageBody } from "../types.js";
+import { ConduitQueue } from "../utils/ConduitQueue.js";
+import { sleep } from "../utils/sleep.js";
 
 /**
  * Provides message-related API methods wrapping the underlying FCA client.
  * Accessible via `client.messages`.
  */
 export class ConduitMessagesAPI {
-  constructor(private readonly bot: MessengerBot) {}
+  constructor(
+    private readonly bot: MessengerBot,
+    private readonly queue?: ConduitQueue,
+  ) {}
 
   /**
    * Sends a message to a thread.
@@ -14,25 +19,22 @@ export class ConduitMessagesAPI {
    * @param threadID - The target thread ID.
    */
   send(body: string | ConduitMessageBody, threadID: string): Promise<any> {
-    if (typeof body === "string") {
-      return new Promise((resolve, reject) => {
-        this.bot.ctx.api.sendMessage(
-          { body },
-          threadID,
-          (err: any, data: any) => {
-            if (err) reject(err);
-            else resolve(data);
-          },
-        );
+    const fn = () =>
+      new Promise(async (resolve, reject) => {
+        await this.bot.ctx.api.sendTypingIndicator(threadID);
+        setTimeout(() => {
+          this.bot.ctx.api.sendMessage(
+            typeof body === "string" ? { body } : body,
+            threadID,
+            (err: any, data: any) => {
+              if (err) reject(err);
+              else resolve(data);
+            },
+          );
+        }, 700);
       });
-    }
 
-    return new Promise((resolve, reject) => {
-      this.bot.ctx.api.sendMessage(body, threadID, (err: any, data: any) => {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
+    return this.queue ? this.queue.enqueue(threadID, fn) : fn();
   }
 
   /**
@@ -46,31 +48,23 @@ export class ConduitMessagesAPI {
     threadID: string,
     messageID: string,
   ): Promise<any> {
-    if (typeof body === "string") {
-      return new Promise((resolve, reject) => {
-        this.bot.ctx.api.sendMessage(
-          { body },
-          threadID,
-          (err: any, data: any) => {
-            if (err) reject(err);
-            else resolve(data);
-          },
-          messageID,
-        );
+    const fn = () =>
+      new Promise(async (resolve, reject) => {
+        await this.bot.ctx.api.sendTypingIndicator(threadID);
+        setTimeout(() => {
+          this.bot.ctx.api.sendMessage(
+            typeof body === "string" ? { body } : body,
+            threadID,
+            (err: any, data: any) => {
+              if (err) reject(err);
+              else resolve(data);
+            },
+            messageID,
+          );
+        }, 700);
       });
-    }
 
-    return new Promise((resolve, reject) => {
-      this.bot.ctx.api.sendMessage(
-        body,
-        threadID,
-        (err: any, data: any) => {
-          if (err) reject(err);
-          else resolve(data);
-        },
-        messageID,
-      );
-    });
+    return this.queue ? this.queue.enqueue(threadID, fn) : fn();
   }
 
   /**
@@ -120,7 +114,8 @@ export class ConduitMessagesAPI {
    * @param threadID - The thread the message belongs to.
    */
   react(emoji: string, messageID: string, threadID: string): Promise<any> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      await sleep(500, 700);
       this.bot.ctx.api.setMessageReaction(
         emoji,
         messageID,
@@ -139,7 +134,7 @@ export class ConduitMessagesAPI {
    */
   sendTypingIndicator(threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      this.bot.ctx.api.sendTypingIndicator(threadID, (err: any) => {
+      this.bot.ctx.api.sendTypingIndicator(threadID, async (err: any) => {
         if (err) reject(err);
         else resolve(null);
       });
