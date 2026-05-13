@@ -14,6 +14,7 @@ import { ConduitThreadsAPI } from "../api/ConduitThreadsAPI.js";
 import { ConduitUsersAPI } from "../api/ConduitUsersAPI.js";
 import { ConduitAccountAPI } from "../api/ConduitAccountAPI.js";
 import { ConduitQueue } from "../utils/ConduitQueue.js";
+import { ConduitMessageBuilder } from "../builders/ConduitMessageBuilder.js";
 
 const FANOUT_EVENTS = new Set<keyof ConduitEvents>([
   "user:create",
@@ -335,7 +336,7 @@ export class ConduitClient {
     const messageID = raw.messageID;
 
     const sendable = {
-      send: (body: string | ConduitMessageBody) =>
+      send: (body: ConduitMessageBuilder | string | ConduitMessageBody) =>
         this.messages.send(body, threadID),
     };
 
@@ -343,7 +344,7 @@ export class ConduitClient {
       return {
         ...raw,
         ...sendable,
-        reply: (body: string | ConduitMessageBody) =>
+        reply: (body: ConduitMessageBuilder | string | ConduitMessageBody) =>
           this.messages.reply(body, threadID, messageID),
         react: (emoji: string) =>
           this.messages.react(emoji, messageID, threadID),

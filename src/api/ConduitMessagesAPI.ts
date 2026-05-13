@@ -2,6 +2,8 @@ import { MessengerBot } from "@dongdev/fca-unofficial";
 import { ConduitMessageBody } from "../types.js";
 import { ConduitQueue } from "../utils/ConduitQueue.js";
 import { sleep } from "../utils/sleep.js";
+import { ConduitMessageBuilder } from "../builders/ConduitMessageBuilder.js";
+import { ConduitAttachmentBuilder } from "../builders/ConduitAttachmentBuilder.js";
 
 /**
  * Provides message-related API methods wrapping the underlying FCA client.
@@ -15,16 +17,31 @@ export class ConduitMessagesAPI {
 
   /**
    * Sends a message to a thread.
-   * @param body - The message text.
+   *
+   * If a queue is configured, the message is enqueued and sent after a typing
+   * indicator. Otherwise it is sent immediately.
+   *
+   * @param body - The message text, a {@link ConduitMessageBody} for rich messages,
+   * or a {@link MessageBuilder} instance which will be built before sending.
    * @param threadID - The target thread ID.
    */
-  send(body: string | ConduitMessageBody, threadID: string): Promise<any> {
+  send(
+    body: ConduitMessageBuilder | string | ConduitMessageBody,
+    threadID: string,
+  ): Promise<any> {
+    const resolved =
+      body instanceof ConduitMessageBuilder
+        ? body.build()
+        : typeof body === "string"
+          ? { body }
+          : body;
+
     const fn = () =>
-      new Promise(async (resolve, reject) => {
-        await this.bot.ctx.api.sendTypingIndicator(threadID);
+      new Promise((resolve, reject) => {
+        this.bot.ctx.api.sendTypingIndicator(threadID);
         setTimeout(() => {
           this.bot.ctx.api.sendMessage(
-            typeof body === "string" ? { body } : body,
+            resolved,
             threadID,
             (err: any, data: any) => {
               if (err) reject(err);
@@ -39,21 +56,33 @@ export class ConduitMessagesAPI {
 
   /**
    * Sends a quoted reply to a specific message.
-   * @param body - The reply text.
+   *
+   * If a queue is configured, the reply is enqueued and sent after a typing
+   * indicator. Otherwise it is sent immediately.
+   *
+   * @param body - The reply text, a {@link ConduitMessageBody} for rich messages,
+   * or a {@link MessageBuilder} instance which will be built before sending.
    * @param threadID - The target thread ID.
    * @param messageID - The message ID to reply to.
    */
   reply(
-    body: string | ConduitMessageBody,
+    body: string | ConduitMessageBody | ConduitMessageBuilder,
     threadID: string,
     messageID: string,
   ): Promise<any> {
+    const resolved =
+      body instanceof ConduitMessageBuilder
+        ? body.build()
+        : typeof body === "string"
+          ? { body }
+          : body;
+
     const fn = () =>
-      new Promise(async (resolve, reject) => {
-        await this.bot.ctx.api.sendTypingIndicator(threadID);
+      new Promise((resolve, reject) => {
+        this.bot.ctx.api.sendTypingIndicator(threadID);
         setTimeout(() => {
           this.bot.ctx.api.sendMessage(
-            typeof body === "string" ? { body } : body,
+            resolved,
             threadID,
             (err: any, data: any) => {
               if (err) reject(err);
@@ -155,12 +184,15 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Uploads a file attachment and returns an attachment object.
-   * @param file - A readable stream or file buffer.
+   * Uploads a file attachment and returns the uploaded attachment object.
+   * @param file - A readable stream, file buffer, or a {@link ConduitAttachmentBuilder} instance.
    */
-  uploadAttachment(file: any): Promise<any> {
+  uploadAttachment(file: any | ConduitAttachmentBuilder): Promise<any> {
+    const resolved =
+      file instanceof ConduitAttachmentBuilder ? file.build() : file;
+
     return new Promise((resolve, reject) => {
-      this.bot.ctx.api.uploadAttachment(file, (err: any, data: any) => {
+      this.bot.ctx.api.uploadAttachment(resolved, (err: any, data: any) => {
         if (err) reject(err);
         else resolve(data);
       });

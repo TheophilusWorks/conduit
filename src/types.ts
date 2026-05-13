@@ -1,4 +1,5 @@
 import { MessengerBotOptions } from "@dongdev/fca-unofficial";
+import { Readable } from "node:stream";
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
@@ -38,6 +39,91 @@ export interface ConduitCredentials {
   };
 }
 
+// ─── Attachments ──────────────────────────────────────────────────────────────
+
+export interface PhotoAttachment {
+  type: "photo";
+  ID: string;
+  filename: string;
+  thumbnailUrl: string;
+  previewUrl: string;
+  previewWidth: number;
+  previewHeight: number;
+  largePreviewUrl: string;
+  largePreviewWidth: number;
+  largePreviewHeight: number;
+  url: string;
+  width: number;
+  height: number;
+  name: string;
+}
+
+export interface AudioAttachment {
+  type: "audio";
+  ID: string;
+  filename: string;
+  audioType: string;
+  duration: number;
+  url: string;
+  isVoiceMail: boolean;
+}
+
+export interface StickerAttachment {
+  type: "sticker";
+  ID: string;
+  url: string;
+  packID: string;
+  spriteUrl: string | null;
+  spriteUrl2x: string | null;
+  width: number;
+  height: number;
+  caption: string;
+  description: string;
+  frameCount: number;
+  frameRate: number;
+  framesPerRow: number;
+  framesPerCol: number;
+  stickerID: string;
+  spriteURI: string | null;
+  spriteURI2x: string | null;
+}
+
+export interface AnimatedImageAttachment {
+  type: "animated_image";
+  ID: string;
+  filename: string;
+  previewUrl: string;
+  previewWidth: number;
+  previewHeight: number;
+  url: string;
+  width: number;
+  height: number;
+  thumbnailUrl: string;
+  name: string;
+  facebookUrl: string;
+  rawGifImage: string;
+  animatedGifUrl: string;
+  animatedGifPreviewUrl: string;
+  animatedWebpUrl: string;
+  animatedWebpPreviewUrl: string;
+}
+
+/** Loosely typed fallback for attachment types not yet confirmed (e.g. file, video). */
+export interface UnknownAttachment {
+  type: string;
+  ID: string;
+  url?: string;
+  filename?: string;
+  [key: string]: any;
+}
+
+export type MessageAttachment =
+  | PhotoAttachment
+  | AudioAttachment
+  | StickerAttachment
+  | AnimatedImageAttachment
+  | UnknownAttachment;
+
 // ─── Shared Shapes ────────────────────────────────────────────────────────────
 
 /**
@@ -49,7 +135,7 @@ export interface Message {
   messageID: string;
   senderID: string;
   body: string;
-  attachments: any[];
+  attachments: MessageAttachment[];
   mentions: Record<string, string>;
   timestamp: string;
   participantIDs: string[];
@@ -317,3 +403,11 @@ export interface ConduitQueueConfig {
   switchDelayMinMs?: number;
   switchDelayMaxMs?: number;
 }
+
+// ─── Builder ───────────────────────────────────────────────────────────────
+
+export type ConduitAttachmentInput =
+  | string        // filepath or URL
+  | Buffer
+  | Readable;
+
