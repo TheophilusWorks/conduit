@@ -1,5 +1,6 @@
 import { MessengerBotOptions } from "@dongdev/fca-unofficial";
 import { Readable } from "node:stream";
+import { ConduitMessageBuilder } from "./builders/ConduitMessageBuilder.js";
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
@@ -154,16 +155,21 @@ export interface ThreadEventBase {
 
 // ─── Enrichment Mixins ────────────────────────────────────────────────────────
 
+export type ConduitSendableBody =
+  | string
+  | ConduitMessageBody
+  | ConduitMessageBuilder;
+
 /** Available on all Conduit event payloads. */
 export interface Sendable {
   /** Send a message to the same thread. */
-  send(body: string): Promise<void>;
+  send(body: ConduitSendableBody): Promise<void>;
 }
 
 /** Available on message events only (`message:*`). */
 export interface Replyable extends Sendable {
   /** Reply to this specific message. */
-  reply(body: string): Promise<void>;
+  reply(body: ConduitSendableBody): Promise<void>;
   /** React to this specific message with an emoji. */
   react(emoji: string): Promise<void>;
 }
@@ -407,7 +413,6 @@ export interface ConduitQueueConfig {
 // ─── Builder ───────────────────────────────────────────────────────────────
 
 export type ConduitAttachmentInput =
-  | string        // filepath or URL
+  | string // filepath or URL
   | Buffer
   | Readable;
-

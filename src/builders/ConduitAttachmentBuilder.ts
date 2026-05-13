@@ -4,8 +4,7 @@ import os from "os";
 import { Readable } from "stream";
 import { ConduitBaseBuilder } from "./ConduitBaseBuilder.js";
 import { downloadFile } from "../utils/downloadFile.js";
-
-export type ConduitAttachmentInput = string | Buffer | Readable;
+import { ConduitAttachmentInput } from "../types.js";
 
 export class ConduitAttachmentBuilder extends ConduitBaseBuilder<Readable[]> {
   constructor() {
