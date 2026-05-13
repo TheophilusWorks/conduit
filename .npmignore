@@ -1,0 +1,7 @@
+.env
+node_modules
+src
+tsconfig.json
+tsup.config.ts
+docs
+index.html
