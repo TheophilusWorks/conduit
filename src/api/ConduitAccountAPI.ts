@@ -1,14 +1,24 @@
 import { MessengerBot } from "@dongdev/fca-unofficial";
 
 /**
- * Provides account-related API methods wrapping the underlying FCA client.
+ * Account-level API wrapper for Conduit.
+ *
+ * Provides methods for managing the authenticated Facebook account,
+ * including session control, social graph actions, and account state changes.
+ *
+ * @remarks
+ * This is a thin wrapper around the underlying FCA API (`bot.ctx.api`),
+ * converting callback-based methods into Promise-based interfaces.
+ *
  * Accessible via `client.account`.
  */
 export class ConduitAccountAPI {
   constructor(private readonly bot: MessengerBot) {}
 
   /**
-   * Returns the logged-in user's Facebook ID.
+   * Retrieves the currently authenticated user's Facebook ID.
+   *
+   * @returns The user ID of the logged-in account
    */
   getCurrentUserID(): string {
     return this.bot.ctx.api.getCurrentUserID();
@@ -16,53 +26,65 @@ export class ConduitAccountAPI {
 
   /**
    * Blocks or unblocks a user.
-   * @param userID - The target user ID.
-   * @param block - `true` to block, `false` to unblock.
+   *
+   * @param userID - Target user to block/unblock
+   * @param block - `true` to block, `false` to unblock
+   *
+   * @remarks
+   * Blocking affects messaging and visibility between accounts.
    */
-  blockUser(userID: string, block: boolean): Promise<any> {
+  blockUser(userID: string, block: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
       this.bot.ctx.api.changeBlockedStatus(userID, block, (err: any) => {
         if (err) reject(err);
-        else resolve(null);
+        else resolve();
       });
     });
   }
 
   /**
-   * Accepts or declines a friend request.
-   * @param userID - The user ID who sent the request.
-   * @param accept - `true` to accept, `false` to decline.
+   * Responds to a friend request.
+   *
+   * @param userID - ID of the user who sent the request
+   * @param accept - `true` to accept, `false` to decline
+   *
+   * @remarks
+   * Declining a request does not notify the sender directly.
    */
-  handleFriendRequest(userID: string, accept: boolean): Promise<any> {
+  handleFriendRequest(userID: string, accept: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
       this.bot.ctx.api.handleFriendRequest(userID, accept, (err: any) => {
         if (err) reject(err);
-        else resolve(null);
+        else resolve();
       });
     });
   }
 
   /**
-   * Removes a user from the friends list.
-   * @param userID - The target user ID.
+   * Removes a user from the authenticated account's friend list.
+   *
+   * @param userID - Target user ID
    */
-  unfriend(userID: string): Promise<any> {
+  unfriend(userID: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.bot.ctx.api.unfriend(userID, (err: any) => {
         if (err) reject(err);
-        else resolve(null);
+        else resolve();
       });
     });
   }
 
   /**
-   * Ends the current session and invalidates cookies.
+   * Logs out the current session and invalidates authentication cookies.
+   *
+   * @remarks
+   * After logout, the client instance becomes unusable until re-authenticated.
    */
-  logout(): Promise<any> {
+  logout(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.bot.ctx.api.logout((err: any) => {
         if (err) reject(err);
-        else resolve(null);
+        else resolve();
       });
     });
   }

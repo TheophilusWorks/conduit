@@ -1,0 +1,7 @@
+{
+  "name": "",
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "hideGenerator": true,
+  "skipErrorChecking": true
+}

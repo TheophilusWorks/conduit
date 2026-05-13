@@ -5,35 +5,51 @@ import { ConduitMessageBuilder } from "./builders/ConduitMessageBuilder.js";
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
 /**
- * A loose string type — behaves like `string` at runtime but preserves
- * literal union autocomplete in the IDE via the `string & {}` trick.
+ * A loose string type that preserves IDE autocomplete for literal unions
+ * while still behaving as a normal string at runtime.
+ *
+ * This is useful for configuration or credential fields where values are
+ * technically strings but benefit from inferred literal suggestions.
  */
 export type Loose = string & {};
 
 // ─── Config & Credentials ─────────────────────────────────────────────────────
 
-/** Configuration options for the Conduit client. Extends {@link MessengerBotOptions}. */
+/**
+ * Configuration options for the Conduit client.
+ *
+ * Extends the underlying Messenger bot options and adds optional queue
+ * configuration for message and thread-level execution control.
+ *
+ * @see MessengerBotOptions
+ */
 export interface ConduitClientConfig extends MessengerBotOptions {
   queue?: {
+    /** Configuration for message send/reply queueing behavior. */
     messageQueue?: ConduitQueueConfig;
+    /** Configuration for thread-level queued operations. */
     threadQueue?: ConduitQueueConfig;
   };
 }
 
 /**
- * Credentials used to authenticate the Conduit client with Facebook.
+ * Authentication credentials for the Conduit client.
  *
- * Provide **one** of the following strategies (in order of recommendation):
- * - `appstate` — array of appstate objects exported from a browser extension
- * - `cookies` — raw cookie header string (`"c_user=...; xs=..."`)
- * - `account` — email/password fallback (not recommended for production)
+ * Only one authentication strategy should be used per session.
+ *
+ * Recommended order:
+ * 1. appstate (most stable and recommended)
+ * 2. cookies (manual session reuse)
+ * 3. account (email/password fallback, least stable)
  */
 export interface ConduitCredentials {
-  /** Facebook appstate — array of cookie-like objects. Recommended. */
+  /** Appstate cookies exported from a browser session. Preferred method. */
   appstate?: Loose[];
-  /** Raw cookie header string. */
+
+  /** Raw cookie header string from a logged-in session. */
   cookies?: Loose;
-  /** Email/password login. Easily triggers checkpoints; avoid in production. */
+
+  /** Email/password login credentials (less stable, may trigger checkpoints). */
   account?: {
     email: Loose;
     password: Loose;
@@ -42,6 +58,9 @@ export interface ConduitCredentials {
 
 // ─── Attachments ──────────────────────────────────────────────────────────────
 
+/**
+ * Photo attachment object returned by the underlying FCA layer.
+ */
 export interface PhotoAttachment {
   type: "photo";
   ID: string;
@@ -59,6 +78,9 @@ export interface PhotoAttachment {
   name: string;
 }
 
+/**
+ * Audio attachment (voice message or audio file).
+ */
 export interface AudioAttachment {
   type: "audio";
   ID: string;
@@ -69,6 +91,9 @@ export interface AudioAttachment {
   isVoiceMail: boolean;
 }
 
+/**
+ * Sticker attachment with metadata for rendering animated or static stickers.
+ */
 export interface StickerAttachment {
   type: "sticker";
   ID: string;
@@ -89,6 +114,9 @@ export interface StickerAttachment {
   spriteURI2x: string | null;
 }
 
+/**
+ * Animated image or GIF attachment with multiple rendering formats.
+ */
 export interface AnimatedImageAttachment {
   type: "animated_image";
   ID: string;
@@ -109,7 +137,11 @@ export interface AnimatedImageAttachment {
   animatedWebpPreviewUrl: string;
 }
 
-/** Loosely typed fallback for attachment types not yet confirmed (e.g. file, video). */
+/**
+ * Fallback attachment type for unsupported or unknown FCA attachments.
+ *
+ * This is used when the attachment type is not explicitly mapped in Conduit.
+ */
 export interface UnknownAttachment {
   type: string;
   ID: string;
@@ -118,6 +150,9 @@ export interface UnknownAttachment {
   [key: string]: any;
 }
 
+/**
+ * Union of all supported message attachment types.
+ */
 export type MessageAttachment =
   | PhotoAttachment
   | AudioAttachment
@@ -128,8 +163,9 @@ export type MessageAttachment =
 // ─── Shared Shapes ────────────────────────────────────────────────────────────
 
 /**
- * A message object shared across message events.
- * Attachments are loosely typed until all shapes are confirmed.
+ * Core message structure shared across all message-related events.
+ *
+ * Represents the normalized message payload used internally by Conduit.
  */
 export interface Message {
   threadID: string;
@@ -143,13 +179,14 @@ export interface Message {
 }
 
 /**
- * Base shape shared across all thread events fanned out from FCA `threadUpdate`.
- * All thread sub-events include at minimum these fields.
+ * Base structure shared by all thread-related events.
  */
 export interface ThreadEventBase {
   threadID: string;
-  /** The user who performed the action. */
+
+  /** User who triggered the event. */
   author: string;
+
   participantIDs: string[];
 }
 
@@ -160,40 +197,56 @@ export type ConduitSendableBody =
   | ConduitMessageBody
   | ConduitMessageBuilder;
 
-/** Available on all Conduit event payloads. */
+/**
+ * Provides the ability to send a message to the current thread.
+ *
+ * This helper is injected into all Conduit event payloads.
+ */
 export interface Sendable {
-  /** Send a message to the same thread. */
+  /** Sends a message to the originating thread. */
   send(body: ConduitSendableBody): Promise<void>;
 }
 
-/** Available on message events only (`message:*`). */
+/**
+ * Extended capabilities available only on message-related events.
+ *
+ * Includes replying to and reacting to a specific message.
+ */
 export interface Replyable extends Sendable {
-  /** Reply to this specific message. */
+  /** Replies directly to the message that triggered the event. */
   reply(body: ConduitSendableBody): Promise<void>;
-  /** React to this specific message with an emoji. */
+
+  /** Adds or removes a reaction on the message. */
   react(emoji: string): Promise<void>;
 }
 
 // ─── Message Payloads ─────────────────────────────────────────────────────────
 
 /**
- * Emitted when a new message is received. Maps to FCA `message`.
+ * Emitted when a new message is created.
  *
- * @note FCA inconsistency: `timestamp` arrives as a string here,
- * unlike `message_reply` where it is a number.
+ * Note: some fields from FCA are inconsistent across event types.
+ *
+ * @remarks
+ * Timestamp format differs depending on event source.
  */
 export interface MessageCreatePayload extends Message, Replyable {
   isGroup: boolean;
 }
 
-/** Emitted when a user replies to a message. Maps to FCA `message_reply`. */
+/**
+ * Emitted when a message is a reply to another message.
+ */
 export interface MessageRespondPayload extends Message, Replyable {
   isGroup: boolean;
-  /** The message being replied to. */
+
+  /** The original message being replied to. */
   messageReply: Message;
 }
 
-/** Emitted when a message is unsent by its sender. Maps to FCA `message_unsend`. */
+/**
+ * Emitted when a message is removed or unsent.
+ */
 export interface MessageRemovePayload extends Sendable {
   threadID: string;
   messageID: string;
@@ -201,25 +254,29 @@ export interface MessageRemovePayload extends Sendable {
   deletionTimestamp: number;
 }
 
-/** Emitted when a reaction is added or removed on a message. Maps to FCA `message_reaction`. */
+/**
+ * Emitted when a reaction is added or removed.
+ */
 export interface MessageReactPayload extends Sendable {
   threadID: string;
   messageID: string;
-  /** The user who owns the message. */
   senderID: string;
-  /** The user who reacted. */
   reactorID: string;
   reaction: string;
 }
 
-/** Emitted when a user starts or stops typing. Maps to FCA `typ`. */
+/**
+ * Emitted when a user starts or stops typing.
+ */
 export interface MessageWritingPayload extends Sendable {
   threadID: string;
   senderID: string;
   isTyping: boolean;
 }
 
-/** Emitted when a thread or message is marked as read. Maps to FCA `read_receipt`. */
+/**
+ * Emitted when a message is marked as read.
+ */
 export interface MessageReadPayload extends Sendable {
   threadID: string;
   readerID: string;
@@ -229,21 +286,23 @@ export interface MessageReadPayload extends Sendable {
 // ─── Thread Payloads ──────────────────────────────────────────────────────────
 
 /**
- * Emitted on any thread metadata change. Catch-all for the raw FCA `threadUpdate` event.
- * For specific changes, prefer the narrower `thread:*` events.
+ * Raw thread update event emitted by FCA before fan-out processing.
  */
 export interface ThreadUpdatePayload extends ThreadEventBase, Sendable {
   logMessageType: string;
   logMessageData: Record<string, any>;
 }
 
-/** Emitted when the group thread title is changed. Maps to FCA `threadUpdate` → `log:thread-name`. */
+/**
+ * Emitted when a thread title is changed.
+ */
 export interface ThreadTitleChangePayload extends ThreadEventBase, Sendable {
-  /** The new thread title. */
   name: string;
 }
 
-/** Emitted when the group photo is changed. Maps to FCA `threadUpdate` → `log:thread-image`. */
+/**
+ * Emitted when a thread photo is replaced.
+ */
 export interface ThreadPhotoReplacedPayload extends ThreadEventBase, Sendable {
   image: {
     attachmentID: string;
@@ -254,7 +313,9 @@ export interface ThreadPhotoReplacedPayload extends ThreadEventBase, Sendable {
   timestamp: string;
 }
 
-/** Emitted when the chat theme or color is changed. Maps to FCA `threadUpdate` → `log:thread-color`. */
+/**
+ * Emitted when thread theme or color changes.
+ */
 export interface ThreadThemeChangedPayload extends ThreadEventBase, Sendable {
   themeColor: string;
   gradient: string;
@@ -264,135 +325,102 @@ export interface ThreadThemeChangedPayload extends ThreadEventBase, Sendable {
   themeEmoji: string;
 }
 
-/** Emitted when a participant's nickname is changed. Maps to FCA `threadUpdate` → `log:user-nickname`. */
+/**
+ * Emitted when a participant nickname is changed.
+ */
 export interface ThreadNicknameChangedPayload
   extends ThreadEventBase,
     Sendable {
-  /** The participant whose nickname was changed. */
   participantID: string;
-  /** The new nickname. Empty string if cleared. */
   nickname: string;
 }
 
-/** Emitted when a participant's admin status is changed. Maps to FCA `threadUpdate` → `log:thread-admins`. */
+/**
+ * Emitted when admin status changes for a participant.
+ */
 export interface ThreadAdminChangedPayload extends ThreadEventBase, Sendable {
-  /** The participant whose admin status changed. */
   targetID: string;
-  /** Whether the participant was promoted or demoted. */
   adminEvent: "add_admin" | "remove_admin";
 }
 
 // ─── User Payloads ────────────────────────────────────────────────────────────
 
-/** A participant added to a group thread. */
+/**
+ * Participant added to a group thread.
+ */
 export interface AddedParticipant {
   fbid: string;
   fullName: string;
 }
 
-/** Emitted when a user is added to a group thread. Maps to FCA `threadUpdate` → `log:subscribe`. */
+/**
+ * User joined a group thread.
+ */
 export interface UserCreatePayload extends ThreadEventBase, Sendable {
   addedParticipants: AddedParticipant[];
 }
 
-/** Emitted when a user is removed from or leaves a group thread. Maps to FCA `threadUpdate` → `log:unsubscribe`. */
+/**
+ * User left or was removed from a group thread.
+ */
 export interface UserRemovePayload extends ThreadEventBase, Sendable {
-  /** The fbid of the participant who left or was removed. */
   leftParticipantFbID: string;
 }
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 /**
- * All events emitted by the Conduit event bus.
+ * Full event map emitted by Conduit.
  *
- * Thread sub-events (join, leave, title change, etc.) arrive as `threadUpdate` from
- * FCA with a `logMessageType` discriminant — Conduit fans those out into the
- * specific `thread:*` and `user:*` events below.
- *
- * @see https://github.com/dongp06/fca-unofficial — Section 15: Events Reference
+ * Each event corresponds to a normalized wrapper over FCA raw events.
  */
 export interface ConduitEvents {
-  // ─── Message ──────────────────────────────────────────────────────────────
-
-  /** A new message was received. Maps to FCA `message`. */
   "message:create": (data: MessageCreatePayload) => Promise<any>;
-  /** A message was unsent by its sender. Maps to FCA `message_unsend`. */
   "message:remove": (data: MessageRemovePayload) => Promise<any>;
-  /** A reaction was added or removed on a message. Maps to FCA `message_reaction`. */
   "message:react": (data: MessageReactPayload) => Promise<any>;
-  /** A reply was sent to an existing message. Maps to FCA `message_reply`. */
   "message:respond": (data: MessageRespondPayload) => Promise<any>;
-  /** A user started or stopped typing. Maps to FCA `typ`. Requires `listenTyping: true`. */
   "message:writing": (data: MessageWritingPayload) => Promise<any>;
-  /** A thread or message was marked as read. Maps to FCA `read_receipt`. */
   "message:read": (data: MessageReadPayload) => Promise<any>;
 
-  // ─── User ─────────────────────────────────────────────────────────────────
-
-  /** A user was added to a group thread. Maps to FCA `threadUpdate` → `log:subscribe`. */
   "user:create": (data: UserCreatePayload) => Promise<any>;
-  /** A user was removed from or left a group thread. Maps to FCA `threadUpdate` → `log:unsubscribe`. */
   "user:remove": (data: UserRemovePayload) => Promise<any>;
 
-  // ─── Thread ───────────────────────────────────────────────────────────────
-
-  /** Thread metadata changed (catch-all). Maps to raw FCA `threadUpdate`. */
   "thread:update": (data: ThreadUpdatePayload) => Promise<any>;
-  /** The thread title was changed. Maps to FCA `threadUpdate` → `log:thread-name`. */
   "thread:title_change": (data: ThreadTitleChangePayload) => Promise<any>;
-  /** The thread photo was changed. Maps to FCA `threadUpdate` → `log:thread-image`. */
   "thread:photo_replaced": (data: ThreadPhotoReplacedPayload) => Promise<any>;
-  /** The thread theme/color was changed. Maps to FCA `threadUpdate` → `log:thread-color`. */
   "thread:theme_changed": (data: ThreadThemeChangedPayload) => Promise<any>;
-  /** A participant's nickname was changed. Maps to FCA `threadUpdate` → `log:user-nickname`. */
   "thread:nickname_changed": (
     data: ThreadNicknameChangedPayload,
   ) => Promise<any>;
-  /** A participant's admin status was changed. Maps to FCA `threadUpdate` → `log:thread-admins`. */
   "thread:admin_changed": (data: ThreadAdminChangedPayload) => Promise<any>;
 }
 
 /**
- * Message object passed to `api.sendMessage()`.
- * At least one of `body`, `attachment`, `url`, or `sticker` should be provided.
+ * Message body structure used when sending content through the API.
  */
 export interface ConduitMessageBody {
-  /** The text content of the message. */
   body?: string;
-
-  /** A readable stream or array of streams to send as attachments. */
   attachment?: NodeJS.ReadableStream | NodeJS.ReadableStream[];
-
-  /** A URL to share in the message. */
   url?: string;
-
-  /** A sticker ID to send. */
   sticker?: string;
-
-  /** An emoji to send as the message. */
   emoji?: string;
-
-  /** The size of the emoji. Defaults to `"small"` if not specified. */
   emojiSize?: "small" | "medium" | "large";
 
   /**
-   * An array of user mentions embedded in the message body.
-   * Each mention must correspond to a substring in `body`.
+   * Mention metadata used for tagging users inside message bodies.
    */
   mentions?: Array<{
-    /** The text in `body` to highlight as the mention (e.g. `"@John"`). */
     tag: string;
-    /** The Facebook user ID of the mentioned user. */
     id: string;
-    /** The character index in `body` where the mention starts. */
     fromIndex?: number;
   }>;
 }
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-/** A middleware function for a specific Conduit event. */
+/**
+ * Middleware handler for Conduit events.
+ */
 export type Middleware<K extends keyof ConduitEvents> = (
   data: Parameters<ConduitEvents[K]> extends [infer First, ...any[]]
     ? First
@@ -400,9 +428,16 @@ export type Middleware<K extends keyof ConduitEvents> = (
   next?: () => Promise<void>,
 ) => Promise<void>;
 
-// ─── Queue ───────────────────────────────────────────────────────────────
+// ─── Queue ───────────────────────────────────────────────────────────────────
 
+/**
+ * A queued async job executed per thread.
+ */
 export type ConduitQueueJob<T> = () => Promise<T>;
+
+/**
+ * Configuration for message/thread queue timing behavior.
+ */
 export interface ConduitQueueConfig {
   minDelayMs: number;
   maxDelayMs: number;
@@ -412,7 +447,7 @@ export interface ConduitQueueConfig {
 
 // ─── Builder ───────────────────────────────────────────────────────────────
 
-export type ConduitAttachmentInput =
-  | string // filepath or URL
-  | Buffer
-  | Readable;
+/**
+ * Input type for attachment builders.
+ */
+export type ConduitAttachmentInput = string | Buffer | Readable;

@@ -43,13 +43,21 @@ const LOG_MESSAGE_TYPE_MAP: Record<string, keyof ConduitEvents> = {
 };
 
 /**
- * High-level Messenger client that wraps the FCA unofficial API and exposes
- * a middleware-based event system modelled after Express/Koa.
+ * High-level Messenger client built on top of the FCA unofficial API.
+ *
+ * Provides:
+ * - middleware-based event system (Koa-style)
+ * - typed APIs for messages, threads, users, and account control
+ * - automatic event enrichment layer
+ *
+ * This class is the main entry point of Conduit.
  *
  * @example
  * ```ts
  * const conduit = new ConduitClient(config);
+ *
  * await conduit.login(credentials);
+ *
  * conduit.on("message:create", async (ctx, next) => {
  *   console.log(ctx.body);
  *   await next();
@@ -57,47 +65,44 @@ const LOG_MESSAGE_TYPE_MAP: Record<string, keyof ConduitEvents> = {
  * ```
  */
 export class ConduitClient {
-  /** Underlying FCA bot instance. `null` until {@link login} resolves. */
+  /** Underlying FCA bot instance. Null until {@link login} resolves. */
   private _client: MessengerBot | null;
 
-  /** Lazily-initialized messages API wrapper. */
+  /** Lazy API: message operations. */
   private _messages: ConduitMessagesAPI | null = null;
 
-  /** Lazily-initialized threads API wrapper. */
+  /** Lazy API: thread operations. */
   private _threads: ConduitThreadsAPI | null = null;
 
-  /** Lazily-initialized users API wrapper. */
+  /** Lazy API: user operations. */
   private _users: ConduitUsersAPI | null = null;
 
-  /** Lazily-initialized account API wrapper. */
+  /** Lazy API: account operations. */
   private _account: ConduitAccountAPI | null = null;
 
-  /** Lazily-initialized queue for message operations. */
+  /** Queue for message operations (optional feature). */
   private _messageQueue: ConduitQueue | null = null;
 
-  /** Lazily-initialized queue for thread operations. */
+  /** Queue for thread operations (optional feature). */
   private _threadQueue: ConduitQueue | null = null;
 
-  /** Configuration forwarded to the FCA layer on login. */
+  /** Runtime configuration passed to FCA layer. */
   private config: ConduitClientConfig;
 
   /**
-   * Registry of middleware stacks keyed by Conduit event name.
-   * Each stack is executed in insertion order via {@link runStack}.
+   * Middleware registry per Conduit event.
+   * Each event holds a stack executed sequentially via {@link runStack}.
    */
   private middlewares: Map<
     keyof ConduitEvents,
     Middleware<keyof ConduitEvents>[]
   >;
 
-  /**
-   * Guards against registering the `threadUpdate` fan-out listener more than once,
-   * regardless of how many fan-out events are subscribed to.
-   */
+  /** Prevents duplicate binding of fan-out listener. */
   private fanOutBound: boolean;
 
   /**
-   * @param config - Client configuration passed through to the FCA bot.
+   * @param config Client configuration passed to underlying FCA bot.
    */
   constructor(config: ConduitClientConfig) {
     this._client = null;
@@ -110,11 +115,11 @@ export class ConduitClient {
   }
 
   /**
-   * API for message operations.
+   * Message-level API for sending, replying, reacting, and editing messages.
    *
-   * Provides methods for sending messages, replying to threads,
-   * reacting to messages, editing content, deleting messages,
-   * and other message-level interactions.
+   * @remarks
+   * When message queueing is enabled, all operations are executed sequentially
+   * with controlled delays to reduce rate-limit risk.
    */
   get messages(): ConduitMessagesAPI {
     return (this._messages ??= new ConduitMessagesAPI(
@@ -124,11 +129,9 @@ export class ConduitClient {
   }
 
   /**
-   * API for thread management operations.
+   * Thread management API.
    *
-   * Includes functionality for retrieving thread data,
-   * managing participants, updating thread metadata (such as title),
-   * and handling thread-level features like polls.
+   * Handles participants, metadata updates, polls, and group operations.
    */
   get threads(): ConduitThreadsAPI {
     return (this._threads ??= new ConduitThreadsAPI(
@@ -138,40 +141,27 @@ export class ConduitClient {
   }
 
   /**
-   * API for user-related operations.
-   *
-   * Supports fetching user profiles, resolving user IDs,
-   * and accessing social graph data such as friends or connections.
+   * User-related API for profiles and social graph queries.
    */
   get users(): ConduitUsersAPI {
     return (this._users ??= new ConduitUsersAPI(this.client));
   }
 
   /**
-   * API for account-level operations.
-   *
-   * Exposes actions tied to the authenticated account such as
-   * retrieving the current user ID, managing friend requests,
-   * blocking users, and logging out.
+   * Account-level API for authentication session operations.
    */
   get account(): ConduitAccountAPI {
     return (this._account ??= new ConduitAccountAPI(this.client));
   }
 
-  /**
-   * Lazily-initialized queue for message operations.
-   * Only created when `config.queue.messageQueue` is defined.
-   */
+  /** Lazy message queue instance. */
   private get messageQueue(): ConduitQueue {
     return (this._messageQueue ??= new ConduitQueue(
       this.config.queue?.messageQueue ?? ({} as ConduitQueueConfig),
     ));
   }
 
-  /**
-   * Lazily-initialized queue for thread operations.
-   * Only created when `config.queue.threadQueue` is defined.
-   */
+  /** Lazy thread queue instance. */
   private get threadQueue(): ConduitQueue {
     return (this._threadQueue ??= new ConduitQueue(
       this.config.queue?.threadQueue ?? ({} as ConduitQueueConfig),
@@ -179,11 +169,15 @@ export class ConduitClient {
   }
 
   /**
-   * Authenticates with Messenger and initialises the underlying FCA bot.
-   * Must be called before any events can be received.
+   * Authenticates with Messenger and initializes the FCA client.
    *
-   * @param credentials - App-state, cookies, or email/password credentials.
-   * @returns The current instance for chaining.
+   * Must be called before using any API or event system.
+   *
+   * @param credentials Authentication method (appstate, cookies, or email/password)
+   * @returns The same client instance for chaining
+   *
+   * @remarks
+   * Email/password login is unstable and may trigger checkpoints.
    */
   public async login(credentials: ConduitCredentials): Promise<this> {
     this._client = await createMessengerBot(
@@ -199,15 +193,13 @@ export class ConduitClient {
   }
 
   /**
-   * Registers one or more middleware handlers for a Conduit event.
+   * Registers middleware for a Conduit event.
    *
-   * The first call for a given event also binds the corresponding FCA listener.
-   * Fan-out events share a single `threadUpdate` FCA binding; all others get
-   * their own dedicated listener via {@link bindConduitEvent}.
+   * The first registration binds the underlying FCA listener.
+   * Middleware executes sequentially and must call `next()`.
    *
-   * @param event - The Conduit event name to subscribe to.
-   * @param middlewares - Ordered middleware functions to push onto the stack.
-   * @returns The current instance for chaining.
+   * @param event Event name
+   * @param middlewares Ordered middleware stack
    */
   public on<K extends keyof ConduitEvents>(
     event: K,
@@ -222,20 +214,18 @@ export class ConduitClient {
         this.bindConduitEvent(event);
       }
     }
+
     this.middlewares
       .get(event)!
       .push(...(middlewares as Middleware<keyof ConduitEvents>[]));
+
     return this;
   }
 
   /**
-   * Registers middleware directly against a raw FCA event, bypassing the
-   * Conduit event abstraction entirely. Useful for events not yet mapped
-   * by the Conduit layer.
+   * Registers middleware on raw FCA events (bypasses Conduit layer).
    *
-   * @param event - Raw FCA event name.
-   * @param middlewares - Middleware functions receiving the raw FCA payload.
-   * @returns The current instance for chaining.
+   * Useful for unsupported or experimental FCA events.
    */
   public onFca(
     event: string,
@@ -251,22 +241,20 @@ export class ConduitClient {
   }
 
   /**
-   * Direct access to the raw FCA API. No type safety — use as a last resort.
+   * Raw FCA API access (no type safety).
    *
-   * @returns The raw FCA API context.
+   * @returns FCA API context
    */
   public get api(): any {
     return this.client.ctx.api;
   }
 
   /**
-   * Translates a single Conduit event to its FCA equivalent and attaches a
-   * listener that enriches the raw payload before running the middleware stack.
-   *
-   * @param event - The Conduit event to bind.
+   * Binds a single Conduit event to FCA listener.
    */
   private bindConduitEvent<K extends keyof ConduitEvents>(event: K) {
     const fcaEvent = toFcaEvent(event);
+
     this.client.on(fcaEvent, async (raw: any) => {
       const stack = this.middlewares.get(event) ?? [];
       await this.runStack(stack, this.enrich(event, raw));
@@ -274,13 +262,9 @@ export class ConduitClient {
   }
 
   /**
-   * Returns the initialized Messenger client instance.
+   * Internal FCA client instance.
    *
-   * This getter enforces the client lifecycle by ensuring that the underlying
-   * FCA bot has been created via {@link login} before any access is allowed.
-   *
-   * @throws {ConduitError} If the client has not been initialized yet.
-   * @returns {MessengerBot} The active Messenger bot instance.
+   * @throws ConduitError if accessed before login()
    */
   private get client(): MessengerBot {
     if (this._client) return this._client;
@@ -288,14 +272,7 @@ export class ConduitClient {
   }
 
   /**
-   * Attaches a single `threadUpdate` FCA listener that fans out to all
-   * relevant Conduit events based on the incoming `logMessageType`.
-   *
-   * `thread:update` always fires with the raw payload when its stack is
-   * non-empty. Specific sub-events fire only when their stack is also
-   * non-empty and a matching `logMessageType` exists.
-   *
-   * Calling this method more than once is a no-op.
+   * Binds threadUpdate fan-out dispatcher.
    */
   private bindFanOutEvents() {
     if (this.fanOutBound) return;
@@ -313,23 +290,19 @@ export class ConduitClient {
       if (!conduitEvent) return;
 
       const stack = this.middlewares.get(conduitEvent) ?? [];
-      if (stack.length === 0) return;
+      if (!stack.length) return;
 
       await this.runStack(stack, this.enrich(conduitEvent, raw));
     });
   }
 
   /**
-   * Augments a raw FCA payload with convenience helpers scoped to the event.
+   * Enriches raw FCA payload with helper methods.
    *
-   * All events receive a `send` helper for replying to the source thread.
-   * Events in the `message:` namespace additionally receive:
-   * - `reply` — sends a quoted reply to the triggering message.
-   * - `react` — sets an emoji reaction on the triggering message.
-   *
-   * @param event - The Conduit event being enriched.
-   * @param raw - The raw FCA payload.
-   * @returns The enriched context object passed to middleware.
+   * @remarks
+   * - All events get `send()`
+   * - Message events get `reply()` and `react()`
+   * - Thread/user events get management helpers
    */
   private enrich(event: keyof ConduitEvents, raw: any): any {
     const threadID = raw.threadID;
@@ -344,8 +317,7 @@ export class ConduitClient {
       return {
         ...raw,
         ...sendable,
-        reply: (body: ConduitMessageBuilder | string | ConduitMessageBody) =>
-          this.messages.reply(body, threadID, messageID),
+        reply: (body: any) => this.messages.reply(body, threadID, messageID),
         react: (emoji: string) =>
           this.messages.react(emoji, messageID, threadID),
       };
@@ -370,11 +342,9 @@ export class ConduitClient {
   }
 
   /**
-   * Executes a middleware stack sequentially, where each handler must call
-   * `next()` to advance to the following handler.
+   * Executes middleware stack sequentially.
    *
-   * @param stack - Ordered array of middleware functions to execute.
-   * @param data - The enriched event payload threaded through the stack.
+   * Each middleware must call `next()` to continue execution.
    */
   private async runStack(stack: Middleware<keyof ConduitEvents>[], data: any) {
     let i = 0;

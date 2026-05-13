@@ -6,7 +6,18 @@ import { ConduitMessageBuilder } from "../builders/ConduitMessageBuilder.js";
 import { ConduitAttachmentBuilder } from "../builders/ConduitAttachmentBuilder.js";
 
 /**
- * Provides message-related API methods wrapping the underlying FCA client.
+ * High-level messaging API for Conduit.
+ *
+ * Provides message sending, editing, reactions, attachments,
+ * and thread interaction utilities.
+ *
+ * @remarks
+ * All methods wrap the underlying FCA callback API and expose
+ * Promise-based interfaces.
+ *
+ * If a {@link ConduitQueue} is provided, outgoing operations are
+ * rate-limited and executed sequentially with simulated typing delays.
+ *
  * Accessible via `client.messages`.
  */
 export class ConduitMessagesAPI {
@@ -18,12 +29,14 @@ export class ConduitMessagesAPI {
   /**
    * Sends a message to a thread.
    *
-   * If a queue is configured, the message is enqueued and sent after a typing
-   * indicator. Otherwise it is sent immediately.
+   * @param body - Message content (text, structured body, or builder)
+   * @param threadID - Target conversation ID
    *
-   * @param body - The message text, a {@link ConduitMessageBody} for rich messages,
-   * or a {@link MessageBuilder} instance which will be built before sending.
-   * @param threadID - The target thread ID.
+   * @remarks
+   * If a queue is enabled, the message is delayed and sent after a
+   * simulated typing indicator for a more natural behavior.
+   *
+   * @returns The sent message metadata from FCA
    */
   send(
     body: ConduitMessageBuilder | string | ConduitMessageBody,
@@ -55,15 +68,14 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Sends a quoted reply to a specific message.
+   * Sends a reply to a specific message.
    *
-   * If a queue is configured, the reply is enqueued and sent after a typing
-   * indicator. Otherwise it is sent immediately.
+   * @param body - Reply content
+   * @param threadID - Conversation ID
+   * @param messageID - Message being replied to
    *
-   * @param body - The reply text, a {@link ConduitMessageBody} for rich messages,
-   * or a {@link MessageBuilder} instance which will be built before sending.
-   * @param threadID - The target thread ID.
-   * @param messageID - The message ID to reply to.
+   * @remarks
+   * Behaves like {@link send} but attaches a reply reference to the message.
    */
   reply(
     body: string | ConduitMessageBody | ConduitMessageBuilder,
@@ -97,9 +109,10 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Edits an existing message.
-   * @param messageID - The message ID to edit.
-   * @param body - The new message text.
+   * Edits an existing message sent by the bot.
+   *
+   * @param messageID - Target message
+   * @param body - New message text
    */
   edit(messageID: string, body: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -111,8 +124,12 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Unsends (retracts) a message sent by the bot.
-   * @param messageID - The message ID to unsend.
+   * Removes a message sent by the bot.
+   *
+   * @param messageID - Message to unsend
+   *
+   * @remarks
+   * This only works on messages created by the authenticated account.
    */
   unsend(messageID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -125,7 +142,8 @@ export class ConduitMessagesAPI {
 
   /**
    * Deletes a message.
-   * @param messageID - The message ID to delete.
+   *
+   * @param messageID - Message to delete
    */
   delete(messageID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -137,10 +155,14 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Adds or removes a reaction on a message.
-   * @param emoji - The emoji reaction string.
-   * @param messageID - The target message ID.
-   * @param threadID - The thread the message belongs to.
+   * Adds or removes a reaction to a message.
+   *
+   * @param emoji - Reaction emoji
+   * @param messageID - Target message
+   * @param threadID - Conversation ID
+   *
+   * @remarks
+   * Includes a small randomized delay to mimic natural interaction timing.
    */
   react(emoji: string, messageID: string, threadID: string): Promise<any> {
     return new Promise(async (resolve, reject) => {
@@ -159,7 +181,8 @@ export class ConduitMessagesAPI {
 
   /**
    * Sends a typing indicator to a thread.
-   * @param threadID - The target thread ID.
+   *
+   * @param threadID - Target conversation
    */
   sendTypingIndicator(threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -172,7 +195,8 @@ export class ConduitMessagesAPI {
 
   /**
    * Marks a message as read.
-   * @param messageID - The message ID to mark as read.
+   *
+   * @param messageID - Message to mark
    */
   markAsRead(messageID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -184,8 +208,9 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Uploads a file attachment and returns the uploaded attachment object.
-   * @param file - A readable stream, file buffer, or a {@link ConduitAttachmentBuilder} instance.
+   * Uploads an attachment and returns the uploaded reference.
+   *
+   * @param file - Stream, buffer, or attachment builder
    */
   uploadAttachment(file: any | ConduitAttachmentBuilder): Promise<any> {
     const resolved =
@@ -201,8 +226,9 @@ export class ConduitMessagesAPI {
 
   /**
    * Forwards an existing attachment to another thread.
-   * @param attachmentID - The attachment ID to forward.
-   * @param threadID - The target thread ID.
+   *
+   * @param attachmentID - Attachment identifier
+   * @param threadID - Destination thread
    */
   forwardAttachment(attachmentID: string, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -215,8 +241,9 @@ export class ConduitMessagesAPI {
 
   /**
    * Shares a contact card to a thread.
-   * @param userID - The user ID of the contact to share.
-   * @param threadID - The target thread ID.
+   *
+   * @param userID - Contact user ID
+   * @param threadID - Target conversation
    */
   shareContact(userID: string, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -228,9 +255,10 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Changes the color theme of a thread.
-   * @param color - The color hex string.
-   * @param threadID - The target thread ID.
+   * Changes the theme color of a thread.
+   *
+   * @param color - Hex color string
+   * @param threadID - Target conversation
    */
   changeThreadColor(color: string, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -242,9 +270,10 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Changes the quick-reaction emoji of a thread.
-   * @param emoji - The emoji string.
-   * @param threadID - The target thread ID.
+   * Changes the quick reaction emoji for a thread.
+   *
+   * @param emoji - Emoji string
+   * @param threadID - Target conversation
    */
   changeThreadEmoji(emoji: string, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -256,8 +285,9 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Fetches a specific message by ID.
-   * @param messageID - The message ID to fetch.
+   * Retrieves a message by ID.
+   *
+   * @param messageID - Target message
    */
   getMessage(messageID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -269,7 +299,9 @@ export class ConduitMessagesAPI {
   }
 
   /**
-   * Returns all available thread color themes.
+   * Retrieves available thread color themes.
+   *
+   * @returns List of supported thread colors
    */
   getThreadColors(): Promise<any> {
     return new Promise((resolve, reject) => {

@@ -1,4 +1,4 @@
-# @theophilusdev/conduit
+## @theophilusdev/conduit
 
 [![GitHub](https://img.shields.io/badge/github-TheophilusWorks%2Fconduit-blue?logo=github)](https://github.com/TheophilusWorks/conduit)
 
@@ -145,7 +145,7 @@ client.api.getThreadList(10, null, ["INBOX"]);
 
 ## API Reference
 
-See [docs/DOCS.md](docs/DOCS.md) for full API details:
+See [docs/DOCS.md](./DOCS.md) for full API details:
 
 - `client.messages`
 - `client.threads`

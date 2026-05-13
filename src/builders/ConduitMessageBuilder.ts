@@ -2,6 +2,16 @@ import { ConduitBaseBuilder } from "./ConduitBaseBuilder.js";
 import { ConduitMessageBody } from "../types.js";
 import { ConduitAttachmentBuilder } from "./ConduitAttachmentBuilder.js";
 
+/**
+ * Fluent builder for constructing message payloads in Conduit.
+ *
+ * Provides a chainable API for composing rich messages including:
+ * text, mentions, attachments, stickers, emojis, and URLs.
+ *
+ * @remarks
+ * This builder is converted internally into a `ConduitMessageBody`
+ * before being sent through the Messages API.
+ */
 export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody> {
   constructor() {
     super({
@@ -10,8 +20,13 @@ export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody
   }
 
   /**
-   * Sets the text body of the message.
-   * @param text - The message text content.
+   * Sets the message text content.
+   *
+   * @param text - Plain text body of the message
+   *
+   * @remarks
+   * This is the primary content field. Mentions are rendered based on
+   * offsets within this string.
    */
   body(text: string) {
     this._data.body = text;
@@ -19,8 +34,12 @@ export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody
   }
 
   /**
-   * Attaches a URL to the message.
-   * @param link - The URL to include.
+   * Attaches a URL preview to the message.
+   *
+   * @param link - Fully qualified URL
+   *
+   * @remarks
+   * The platform may render this as a link preview depending on client support.
    */
   url(link: string) {
     this._data.url = link;
@@ -28,9 +47,13 @@ export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody
   }
 
   /**
-   * Attaches one or more file streams to the message.
-   * Use {@link ConduitAttachmentBuilder} to build streams from paths, URLs, or buffers.
-   * @param file - A ConduitAttachmentBuilder, a readable stream or array of readable streams.
+   * Attaches one or more files to the message.
+   *
+   * @param file - Attachment source (builder, stream, or stream array)
+   *
+   * @remarks
+   * If a `ConduitAttachmentBuilder` is provided, it will be resolved into
+   * readable streams before sending.
    */
   attachment(
     file:
@@ -44,8 +67,9 @@ export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody
   }
 
   /**
-   * Sends a sticker by its Facebook sticker ID.
-   * @param id - The sticker ID.
+   * Sends a sticker using a Facebook sticker ID.
+   *
+   * @param id - Sticker identifier
    */
   sticker(id: string) {
     this._data.sticker = id;
@@ -54,8 +78,12 @@ export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody
 
   /**
    * Sends a large emoji message.
-   * @param value - The emoji character.
-   * @param size - The display size. Defaults to `"small"`.
+   *
+   * @param value - Emoji character
+   * @param size - Display size (small, medium, large)
+   *
+   * @remarks
+   * Larger sizes may be rendered differently depending on client.
    */
   emoji(value: string, size: "small" | "medium" | "large" = "small") {
     this._data.emoji = value;
@@ -64,11 +92,14 @@ export class ConduitMessageBuilder extends ConduitBaseBuilder<ConduitMessageBody
   }
 
   /**
-   * Adds a mention to the message.
-   * Multiple mentions can be chained.
-   * @param tag - The display tag string (e.g. `"@username"`).
-   * @param id - The Facebook user ID of the mentioned user.
-   * @param fromIndex - The character index in the body where the tag starts.
+   * Adds a mention inside the message body.
+   *
+   * @param tag - Display text (e.g. "@john")
+   * @param id - Target user ID
+   * @param fromIndex - Starting index of the mention in the body string
+   *
+   * @remarks
+   * Multiple mentions can be chained. Offsets must match the final body text.
    */
   mention(tag: string, id: string, fromIndex?: number) {
     this._data.mentions ??= [];

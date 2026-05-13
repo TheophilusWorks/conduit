@@ -6,19 +6,32 @@ import { ConduitBaseBuilder } from "./ConduitBaseBuilder.js";
 import { downloadFile } from "../utils/downloadFile.js";
 import { ConduitAttachmentInput } from "../types.js";
 
+/**
+ * Builder for constructing attachment streams used in message uploads.
+ *
+ * Supports multiple input types:
+ * - File path → streamed via `fs.createReadStream`
+ * - URL → downloaded to temporary file then streamed
+ * - Buffer → converted via `Readable.from`
+ * - Readable → passed through directly
+ *
+ * @remarks
+ * URL-based inputs are temporarily written to disk and automatically
+ * deleted after streaming completes. This ensures memory efficiency
+ * but introduces asynchronous cleanup behavior.
+ */
 export class ConduitAttachmentBuilder extends ConduitBaseBuilder<Readable[]> {
   constructor() {
     super([]);
   }
 
   /**
-   * Adds an attachment from a file path, URL, Buffer, or Readable stream.
-   * - File path → `fs.createReadStream`
-   * - URL → downloads to a temp file, streams, then cleans up
-   * - Buffer → `Readable.from`
-   * - Readable → pass-through
+   * Adds an attachment source to the builder.
    *
-   * @param input - The attachment source.
+   * @param input - File path, URL, Buffer, or Readable stream
+   *
+   * @remarks
+   * URL inputs are downloaded asynchronously and streamed from a temporary file.
    */
   public from(input: ConduitAttachmentInput): this {
     if (input instanceof Readable) {
@@ -41,7 +54,11 @@ export class ConduitAttachmentBuilder extends ConduitBaseBuilder<Readable[]> {
   }
 
   /**
-   * Downloads a remote file to a temp path and returns a self-cleaning stream.
+   * Downloads a remote file to a temporary location and streams it.
+   *
+   * @remarks
+   * The temporary file is automatically removed once streaming completes.
+   * Errors during download or streaming will destroy the stream.
    */
   private _streamFromURL(url: string): Readable {
     const ext = (() => {

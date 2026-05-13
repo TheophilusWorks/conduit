@@ -2,7 +2,16 @@ import { MessengerBot } from "@dongdev/fca-unofficial";
 import { ConduitQueue } from "../utils/ConduitQueue.js";
 
 /**
- * Provides thread-related API methods wrapping the underlying FCA client.
+ * High-level thread management API for Conduit.
+ *
+ * Provides utilities for interacting with group chats, message threads,
+ * participants, and thread-level metadata.
+ *
+ * @remarks
+ * This class wraps the FCA callback-based API into Promise-based methods.
+ * Certain mutating operations may be queued when a {@link ConduitQueue}
+ * is provided (e.g. nickname changes, title updates, polls).
+ *
  * Accessible via `client.threads`.
  */
 export class ConduitThreadsAPI {
@@ -12,8 +21,10 @@ export class ConduitThreadsAPI {
   ) {}
 
   /**
-   * Fetches detailed info about a thread.
-   * @param threadID - The thread ID to query.
+   * Retrieves detailed metadata about a thread.
+   *
+   * @param threadID - Target conversation ID
+   * @returns Thread information object from FCA
    */
   getInfo(threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -26,9 +37,10 @@ export class ConduitThreadsAPI {
 
   /**
    * Fetches a paginated list of threads.
-   * @param limit - Number of threads to return.
-   * @param cursor - Pagination cursor, or `null` for the first page.
-   * @param folders - Folder filters e.g. `["INBOX"]`.
+   *
+   * @param limit - Maximum number of threads to return
+   * @param cursor - Pagination cursor or `null` for first page
+   * @param folders - Thread folders to include (e.g. `["INBOX"]`)
    */
   getList(limit: number, cursor: any, folders: string[]): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -45,9 +57,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Fetches message history for a thread.
-   * @param threadID - The thread ID to query.
-   * @param limit - Number of messages to return.
+   * Retrieves message history for a thread.
+   *
+   * @param threadID - Target conversation ID
+   * @param limit - Number of messages to fetch
    */
   getHistory(threadID: string, limit: number): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -64,8 +77,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Searches for threads by name or keyword.
-   * @param query - The search query string.
+   * Searches for threads by keyword or name.
+   *
+   * @param query - Search term
+   * @returns Matching thread results
    */
   search(query: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -78,8 +93,10 @@ export class ConduitThreadsAPI {
 
   /**
    * Creates a new group conversation.
-   * @param userIDs - Array of user IDs to add to the group.
-   * @param name - Optional group name.
+   *
+   * @param userIDs - Participants to include in the group
+   * @param name - Optional group title
+   * @returns Newly created thread data
    */
   createGroup(userIDs: string[], name?: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -91,9 +108,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Adds a user to an existing group thread.
-   * @param userID - The user ID to add.
-   * @param threadID - The target group thread ID.
+   * Adds a user to a group thread.
+   *
+   * @param userID - User to add
+   * @param threadID - Target group thread
    */
   addUser(userID: string, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -106,8 +124,9 @@ export class ConduitThreadsAPI {
 
   /**
    * Removes a user from a group thread.
-   * @param userID - The user ID to remove.
-   * @param threadID - The target group thread ID.
+   *
+   * @param userID - User to remove
+   * @param threadID - Target group thread
    */
   removeUser(userID: string, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -119,10 +138,11 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Promotes or demotes a user's admin status in a group.
-   * @param userID - The target user ID.
-   * @param threadID - The group thread ID.
-   * @param admin - `true` to promote, `false` to demote.
+   * Changes a participant's admin status.
+   *
+   * @param userID - Target user
+   * @param threadID - Group thread
+   * @param admin - `true` to promote, `false` to demote
    */
   changeAdminStatus(
     userID: string,
@@ -143,9 +163,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Updates the group's profile image.
-   * @param image - A readable stream or file buffer.
-   * @param threadID - The target group thread ID.
+   * Updates the group profile image.
+   *
+   * @param image - Image stream or buffer
+   * @param threadID - Target group thread
    */
   changeGroupImage(image: any, threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -158,9 +179,13 @@ export class ConduitThreadsAPI {
 
   /**
    * Sets a participant's nickname in a thread.
-   * @param nickname - The new nickname. Pass an empty string to clear.
-   * @param threadID - The thread ID.
-   * @param userID - The target user ID.
+   *
+   * @param nickname - New nickname (empty string clears it)
+   * @param threadID - Target thread
+   * @param userID - Target user
+   *
+   * @remarks
+   * This operation may be queued if a ConduitQueue is configured.
    */
   changeNickname(
     nickname: string,
@@ -184,9 +209,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Changes the title of a group thread.
-   * @param title - The new group title.
-   * @param threadID - The target group thread ID.
+   * Updates the title of a group thread.
+   *
+   * @param title - New group name
+   * @param threadID - Target group thread
    */
   setTitle(title: string, threadID: string): Promise<any> {
     const fn = () =>
@@ -202,9 +228,10 @@ export class ConduitThreadsAPI {
 
   /**
    * Creates a poll in a thread.
-   * @param title - The poll question.
-   * @param threadID - The target thread ID.
-   * @param options - Array of answer options.
+   *
+   * @param title - Poll question
+   * @param threadID - Target thread
+   * @param options - Answer choices
    */
   createPoll(title: string, threadID: string, options: string[]): Promise<any> {
     const fn = () =>
@@ -225,7 +252,8 @@ export class ConduitThreadsAPI {
 
   /**
    * Deletes a thread.
-   * @param threadID - The thread ID to delete.
+   *
+   * @param threadID - Target thread
    */
   delete(threadID: string): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -237,9 +265,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Mutes or unmutes notifications for a thread.
-   * @param threadID - The target thread ID.
-   * @param muteUntil - Timestamp (ms) to mute until. Pass `-1` to mute indefinitely, `0` to unmute.
+   * Mutes or unmutes a thread.
+   *
+   * @param threadID - Target thread
+   * @param muteUntil - Timestamp in ms, `-1` for permanent mute, `0` to unmute
    */
   mute(threadID: string, muteUntil: number): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -251,9 +280,10 @@ export class ConduitThreadsAPI {
   }
 
   /**
-   * Accepts or declines a message request.
-   * @param threadID - The thread ID of the request.
-   * @param accept - `true` to accept, `false` to decline.
+   * Accepts or rejects a message request thread.
+   *
+   * @param threadID - Request thread
+   * @param accept - `true` to accept, `false` to decline
    */
   handleMessageRequest(threadID: string, accept: boolean): Promise<any> {
     return new Promise((resolve, reject) => {

@@ -1,7 +1,7 @@
 {
   "name": "@theophilusdev/conduit",
   "description": "A simple FCA wrapper library with typescript support",
-  "version": "1.3.5",
+  "version": "1.3.6",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -16,7 +16,9 @@
   "scripts": {
     "build": "tsup",
     "release": "npm run build && npm publish",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc ./src/index.ts",
+    "docs:deploy": "npm run docs && gh-pages -d docs"
   },
   "keywords": [
     "facebook-chat-api",
@@ -38,7 +40,9 @@
   "homepage": "https://github.com/TheophilusWorks/conduit#readme",
   "devDependencies": {
     "@types/node": "^25.6.0",
+    "gh-pages": "^6.3.0",
     "tsup": "^8.5.1",
+    "typedoc": "^0.28.19",
     "typescript": "^6.0.3"
   },
   "dependencies": {
