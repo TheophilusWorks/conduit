@@ -158,4 +158,6 @@ GNU GPL v3 © theophilusdev
 
 ---
 
-Built on top of [`@dongdev/fca-unofficial`](https://github.com/dongp06/fca-unofficial).
+Official GitHub repository: [`TheophilusWorks/conduit`](https://github.com/TheophilusWorks/conduit)
+NPM Package: [`@theophilusdev/conduit`](https://npmjs.com/@theophilusdev/conduit)
+Built on top of [`@dongdev/fca-unofficial`](https://github.com/dongp06/fca-unofficial) FCA.
