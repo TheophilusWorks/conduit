@@ -1,4 +1,6 @@
 import { MessengerBot } from "@dongdev/fca-unofficial";
+import { ConduitCacheConfig, UserInfo, UserInfoResponse } from "../types.js";
+import { ConduitSlidingCache } from "../utils/ConduitSlidingCache.js";
 
 /**
  * High-level API for interacting with Messenger user data.
@@ -10,7 +12,11 @@ import { MessengerBot } from "@dongdev/fca-unofficial";
  * raw responses unless otherwise specified.
  */
 export class ConduitUsersAPI {
-  constructor(private readonly bot: MessengerBot) {}
+  constructor(
+    private readonly bot: MessengerBot,
+    private readonly config: ConduitCacheConfig | undefined,
+    private userCache: ConduitSlidingCache<UserInfo>,
+  ) {}
 
   /**
    * Retrieves profile information for one or more users.
@@ -22,16 +28,25 @@ export class ConduitUsersAPI {
    *
    * @returns A map of user IDs to their corresponding profile data.
    */
-  getInfo(userID: string | string[]): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.bot.ctx.api.getUserInfo(
-        Array.isArray(userID) ? userID : [userID],
-        (err: any, data: any) => {
-          if (err) reject(err);
-          else resolve(data);
-        },
-      );
-    });
+  async getInfo(userID: string | string[]): Promise<UserInfoResponse> {
+    const ids = Array.isArray(userID) ? userID : [userID];
+
+    if (!this.config?.ttlInMS) {
+      return this._fetchInfo(ids);
+    }
+
+    const result: UserInfoResponse = {};
+
+    await Promise.all(
+      ids.map(async (id) => {
+        result[id] = await this.userCache.touch(id, async () => {
+          const fetched = await this._fetchInfo([id]);
+          return fetched[id];
+        });
+      }),
+    );
+
+    return result;
   }
 
   /**
@@ -44,7 +59,7 @@ export class ConduitUsersAPI {
    *
    * @returns A resolved Facebook user ID or resolution metadata.
    */
-  getID(vanity: string): Promise<any> {
+  getID(vanity: string): Promise<string> {
     return new Promise((resolve, reject) => {
       this.bot.ctx.api.getUserID(vanity, (err: any, data: any) => {
         if (err) reject(err);
@@ -64,6 +79,24 @@ export class ConduitUsersAPI {
   getFriendsList(): Promise<any> {
     return new Promise((resolve, reject) => {
       this.bot.ctx.api.getFriendsList((err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+  }
+
+  private _fetchInfo(ids: string[]): Promise<UserInfoResponse> {
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getUserInfo(ids, (err: any, data: any) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
+    });
+  }
+
+  private _fetchID(vanity: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.bot.ctx.api.getUserID(vanity, (err: any, data: any) => {
         if (err) reject(err);
         else resolve(data);
       });

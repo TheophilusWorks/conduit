@@ -1,11 +1,13 @@
 import { createMessengerBot, MessengerBot } from "@dongdev/fca-unofficial";
 import {
+  ConduitCacheConfig,
   ConduitClientConfig,
   ConduitCredentials,
   ConduitEvents,
   ConduitMessageBody,
   ConduitQueueConfig,
   Middleware,
+  UserInfo,
 } from "../types.js";
 import { toFcaEvent } from "../utils/toFcaEvent.js";
 import { ConduitError } from "../errors/ConduitError.js";
@@ -15,6 +17,7 @@ import { ConduitUsersAPI } from "../api/ConduitUsersAPI.js";
 import { ConduitAccountAPI } from "../api/ConduitAccountAPI.js";
 import { ConduitQueue } from "../utils/ConduitQueue.js";
 import { ConduitMessageBuilder } from "../builders/ConduitMessageBuilder.js";
+import { ConduitSlidingCache } from "../utils/ConduitSlidingCache.js";
 
 const FANOUT_EVENTS = new Set<keyof ConduitEvents>([
   "user:create",
@@ -86,6 +89,9 @@ export class ConduitClient {
   /** Queue for thread operations (optional feature). */
   private _threadQueue: ConduitQueue | null = null;
 
+  /** A list of user cache stored after fetching */
+  private _userCache: ConduitSlidingCache<UserInfo> | null = null;
+
   /** Runtime configuration passed to FCA layer. */
   private config: ConduitClientConfig;
 
@@ -144,7 +150,11 @@ export class ConduitClient {
    * User-related API for profiles and social graph queries.
    */
   get users(): ConduitUsersAPI {
-    return (this._users ??= new ConduitUsersAPI(this.client));
+    return (this._users ??= new ConduitUsersAPI(
+      this.client,
+      this.config.cache?.cacheUsers ? this.config.cache.cacheUsers : undefined,
+      this.userCache,
+    ));
   }
 
   /**
@@ -165,6 +175,13 @@ export class ConduitClient {
   private get threadQueue(): ConduitQueue {
     return (this._threadQueue ??= new ConduitQueue(
       this.config.queue?.threadQueue ?? ({} as ConduitQueueConfig),
+    ));
+  }
+
+  /** Lazy thread user cache instance. */
+  private get userCache(): ConduitSlidingCache<UserInfo> {
+    return (this._userCache ??= new ConduitSlidingCache(
+      this.config.cache?.cacheUsers ?? ({} as ConduitCacheConfig),
     ));
   }
 

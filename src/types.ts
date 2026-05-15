@@ -30,6 +30,10 @@ export interface ConduitClientConfig extends MessengerBotOptions {
     /** Configuration for thread-level queued operations. */
     threadQueue?: ConduitQueueConfig;
   };
+
+  cache: {
+    cacheUsers: ConduitCacheConfig;
+  };
 }
 
 /**
@@ -367,6 +371,24 @@ export interface UserRemovePayload extends ThreadEventBase, Sendable {
   leftParticipantFbID: string;
 }
 
+/**
+ * User info fetched via user ID
+ */
+export interface UserInfo {
+  name: string;
+  firstName: string;
+  vanity: string;
+  thumbSrc: string;
+  profileUrl: string;
+  gender: 1 | 2;
+  type: "user";
+  isFriend: boolean;
+  isBirthDay: boolean;
+  searchTokens: string[];
+}
+
+export type UserInfoResponse = Record<string, UserInfo>;
+
 // ─── Events ───────────────────────────────────────────────────────────────────
 
 /**
@@ -446,8 +468,24 @@ export interface ConduitQueueConfig {
 }
 
 // ─── Builder ───────────────────────────────────────────────────────────────
-
 /**
  * Input type for attachment builders.
  */
 export type ConduitAttachmentInput = string | Buffer | Readable;
+
+// ─── Cache ───────────────────────────────────────────────────────────────
+
+/**
+ * The stored value wrapper in the cache map
+ */
+export interface ConduitCacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+/**
+ * Constructor argument in cache
+ */
+export interface ConduitCacheConfig {
+  ttlInMS: number;
+}
