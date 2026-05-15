@@ -488,4 +488,5 @@ export interface ConduitCacheEntry<T> {
  */
 export interface ConduitCacheConfig {
   ttlInMS: number;
+  cleanupIntervalInMS: number;
 }

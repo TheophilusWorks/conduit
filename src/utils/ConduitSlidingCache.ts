@@ -14,11 +14,15 @@ export class ConduitSlidingCache<T> {
   private cacheMap: Map<string, ConduitCacheEntry<T>>;
   private inFlight: Map<string, boolean>;
   private ttlInMS: number;
+  private cleanupIntervalInMS: number;
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(config: ConduitCacheConfig) {
     this.cacheMap = new Map();
     this.inFlight = new Map();
     this.ttlInMS = config.ttlInMS;
+    this.cleanupIntervalInMS = config.cleanupIntervalInMS;
+    this._cleanup();
   }
 
   /**
@@ -62,5 +66,23 @@ export class ConduitSlidingCache<T> {
    */
   private _expiryTime() {
     return this.ttlInMS + Date.now();
+  }
+
+  /**
+   * iterates to every value in cache and deletes all
+   * stale/unused data.
+   */
+  private _cleanup() {
+    if (this.cleanupInterval) return;
+
+    this.cleanupInterval = setInterval(() => {
+      let now = Date.now();
+
+      for (const [key, cache] of this.cacheMap) {
+        if (cache.expiresAt <= now) {
+          this.cacheMap.delete(key);
+        }
+      }
+    }, this.cleanupIntervalInMS);
   }
 }
