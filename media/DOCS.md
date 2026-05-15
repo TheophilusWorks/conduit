@@ -27,6 +27,9 @@ const client = new ConduitClient({
   listenEvents: true,
   autoReconnect: true,
   online: true,
+  cache: {
+    userCache: { ttlInMS: 60_000 },
+  },
 });
 
 await client.login({ appstate });
@@ -42,11 +45,12 @@ new ConduitClient(config: ConduitClientConfig)
 
 Creates a new Conduit client instance. Config extends `MessengerBotOptions` from `@dongdev/fca-unofficial` with the following additions:
 
-| Field                | Type                 | Default    | Description                         |
-| -------------------- | -------------------- | ---------- | ----------------------------------- |
-| `logLevel`           | `string`             | `"silent"` | FCA log verbosity                   |
-| `queue.messageQueue` | `ConduitQueueConfig` | —          | Enables message queuing with delays |
-| `queue.threadQueue`  | `ConduitQueueConfig` | —          | Enables thread operation queuing    |
+| Field                | Type                 | Default    | Description                                           |
+| -------------------- | -------------------- | ---------- | ----------------------------------------------------- |
+| `logLevel`           | `string`             | `"silent"` | FCA log verbosity                                     |
+| `queue.messageQueue` | `ConduitQueueConfig` | —          | Enables message queuing with delays                   |
+| `queue.threadQueue`  | `ConduitQueueConfig` | —          | Enables thread operation queuing                      |
+| `cache.userCache`    | `ConduitCacheConfig` | —          | Enables sliding-window cache for `client.users` calls |
 
 ---
 
@@ -517,11 +521,15 @@ await client.threads.handleMessageRequest(threadID, false); // decline
 
 Handles user-related operations. Accessible via `client.users`.
 
+When `cache.userCache` is configured, `getInfo` uses a sliding-expiry cache — each read resets the TTL for that entry. Only uncached IDs hit the API; results are stored automatically. No extra flag needed — defining the config is enough to enable it.
+
 ---
 
 ### `.getInfo(userID)`
 
 Fetches info for one or more users. Accepts a single ID or an array.
+
+Cached per user ID when `cache.userCache` is configured. In-flight requests for the same ID are deduplicated automatically.
 
 ```ts
 const user = await client.users.getInfo("uid");
@@ -765,6 +773,10 @@ interface ConduitClientConfig extends MessengerBotOptions {
     messageQueue?: ConduitQueueConfig;
     threadQueue?: ConduitQueueConfig;
   };
+
+  cache: {
+    userCache: ConduitCacheConfig;
+  };
 }
 ```
 
@@ -778,6 +790,16 @@ interface ConduitQueueConfig {
   maxDelayMs?: number; // default: 1500
   switchDelayMinMs?: number; // default: 500 — extra delay when switching threads
   switchDelayMaxMs?: number; // default: 700
+}
+```
+
+---
+
+### `ConduitCacheConfig`
+
+```ts
+export interface ConduitCacheConfig {
+  ttlInMS: number;
 }
 ```
 
@@ -886,4 +908,3 @@ Full event map. See `src/types.ts` for all payload shapes.
 | `client:network_error`    | Network-level error                                      |
 
 ---
-
