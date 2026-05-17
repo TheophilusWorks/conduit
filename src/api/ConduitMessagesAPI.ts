@@ -1,9 +1,17 @@
 import { MessengerBot } from "@dongdev/fca-unofficial";
-import { ConduitMessageBody } from "../types.js";
+import { EventEmitter } from "events";
+import {
+  CollectorOptions,
+  CollectorPayload,
+  ConduitEvents,
+  ConduitMessageBody,
+  SentMessage,
+} from "../types.js";
 import { ConduitQueue } from "../utils/ConduitQueue.js";
 import { sleep } from "../utils/sleep.js";
 import { ConduitMessageBuilder } from "../builders/ConduitMessageBuilder.js";
 import { ConduitAttachmentBuilder } from "../builders/ConduitAttachmentBuilder.js";
+import { ConduitMessageCollector } from "../utils/ConduitMessageCollector.js";
 
 /**
  * High-level messaging API for Conduit.
@@ -23,8 +31,21 @@ import { ConduitAttachmentBuilder } from "../builders/ConduitAttachmentBuilder.j
 export class ConduitMessagesAPI {
   constructor(
     private readonly bot: MessengerBot,
+    private readonly eventBus: EventEmitter,
     private readonly queue?: ConduitQueue,
   ) {}
+
+  // ─── Internals ─────────────────────────────────────────────────────────────
+
+  /**
+   * Wraps raw FCA sent message data into a {@link SentMessage} with
+   * `collect()` and `waitResponse()` scoped to the sent message ID.
+   */
+  private toSentMessage(data: any, threadID: string): SentMessage {
+    return new SentMessageImpl(data.messageID, threadID, this.eventBus);
+  }
+
+  // ─── Sending ───────────────────────────────────────────────────────────────
 
   /**
    * Sends a message to a thread.
@@ -36,12 +57,12 @@ export class ConduitMessagesAPI {
    * If a queue is enabled, the message is delayed and sent after a
    * simulated typing indicator for a more natural behavior.
    *
-   * @returns The sent message metadata from FCA
+   * @returns A {@link SentMessage} with `collect()` and `waitResponse()` scoped to this message.
    */
   send(
     body: ConduitMessageBuilder | string | ConduitMessageBody,
     threadID: string,
-  ): Promise<any> {
+  ): Promise<SentMessage> {
     const resolved =
       body instanceof ConduitMessageBuilder
         ? body.build()
@@ -50,7 +71,7 @@ export class ConduitMessagesAPI {
           : body;
 
     const fn = () =>
-      new Promise((resolve, reject) => {
+      new Promise<SentMessage>((resolve, reject) => {
         this.bot.ctx.api.sendTypingIndicator(threadID);
         setTimeout(() => {
           this.bot.ctx.api.sendMessage(
@@ -58,7 +79,7 @@ export class ConduitMessagesAPI {
             threadID,
             (err: any, data: any) => {
               if (err) reject(err);
-              else resolve(data);
+              else resolve(this.toSentMessage(data, threadID));
             },
           );
         }, 700);
@@ -76,12 +97,14 @@ export class ConduitMessagesAPI {
    *
    * @remarks
    * Behaves like {@link send} but attaches a reply reference to the message.
+   *
+   * @returns A {@link SentMessage} with `collect()` and `waitResponse()` scoped to this message.
    */
   reply(
     body: string | ConduitMessageBody | ConduitMessageBuilder,
     threadID: string,
     messageID: string,
-  ): Promise<any> {
+  ): Promise<SentMessage> {
     const resolved =
       body instanceof ConduitMessageBuilder
         ? body.build()
@@ -90,7 +113,7 @@ export class ConduitMessagesAPI {
           : body;
 
     const fn = () =>
-      new Promise((resolve, reject) => {
+      new Promise<SentMessage>((resolve, reject) => {
         this.bot.ctx.api.sendTypingIndicator(threadID);
         setTimeout(() => {
           this.bot.ctx.api.sendMessage(
@@ -98,7 +121,7 @@ export class ConduitMessagesAPI {
             threadID,
             (err: any, data: any) => {
               if (err) reject(err);
-              else resolve(data);
+              else resolve(this.toSentMessage(data, threadID));
             },
             messageID,
           );
@@ -107,6 +130,8 @@ export class ConduitMessagesAPI {
 
     return this.queue ? this.queue.enqueue(threadID, fn) : fn();
   }
+
+  // ─── Rest unchanged ────────────────────────────────────────────────────────
 
   /**
    * Edits an existing message sent by the bot.
@@ -308,6 +333,178 @@ export class ConduitMessagesAPI {
       this.bot.ctx.api.getThreadColors((err: any, data: any) => {
         if (err) reject(err);
         else resolve(data);
+      });
+    });
+  }
+}
+
+/**
+ * Concrete implementation of {@link SentMessage}.
+ *
+ * Wraps a sent message's identity and provides scoped collector and
+ * reply-waiting helpers backed by the internal Conduit event bus.
+ *
+ * Constructed automatically by {@link ConduitMessagesAPI.send} and
+ * {@link ConduitMessagesAPI.reply} — never instantiated directly.
+ */
+class SentMessageImpl implements SentMessage {
+  /**
+   * @param messageID - The ID of the sent message.
+   * @param threadID  - The thread the message was sent to.
+   * @param eventBus  - The internal Conduit event bus to subscribe collectors to.
+   */
+  constructor(
+    public readonly messageID: string,
+    public readonly threadID: string,
+    private readonly eventBus: EventEmitter,
+  ) {}
+
+  /**
+   * Creates a {@link ConduitMessageCollector} that listens for incoming events
+   * on the internal event bus.
+   *
+   * **Default overload** — subscribes to `"message:respond"` only.
+   * The `filter` callback and `collect` event payload are typed as `MessageRespondPayload`.
+   *
+   * @param options - Collector configuration.
+   *
+   * @example
+   * ```ts
+   * const collector = sent.collect({ timeout: 30_000, max: 5 });
+   *
+   * collector.on("collect", async (msg) => {
+   *   await msg.reply(`you said: ${msg.body}`);
+   * });
+   * ```
+   */
+  collect(
+    options?: CollectorOptions<["message:respond"]>,
+  ): ConduitMessageCollector<["message:respond"]>;
+
+  /**
+   * Creates a {@link ConduitMessageCollector} that listens for incoming events
+   * on the internal event bus.
+   *
+   * **Custom events overload** — subscribes to all events in the provided array.
+   * The `filter` callback and `collect` event payload are typed as a union of
+   * all listed event payloads, derived automatically from the events array.
+   *
+   * @param events  - Tuple of Conduit event names to subscribe to.
+   * @param options - Collector configuration.
+   *
+   * @example
+   * ```ts
+   * const collector = sent.collect(["message:respond", "message:react"], {
+   *   timeout: 30_000,
+   *   filter: (e) => {
+   *     if (e.type === "message:react") return e.reactorID === senderID;
+   *     return e.senderID === senderID;
+   *   },
+   * });
+   *
+   * collector.on("collect", async (event) => {
+   *   if (event.type === "message:react") {
+   *     await ctx.reply(`you reacted: ${event.reaction}`);
+   *   } else {
+   *     await ctx.reply(`you said: ${event.body}`);
+   *   }
+   * });
+   * ```
+   */
+  collect<K extends readonly (keyof ConduitEvents)[]>(
+    events: K,
+    options?: CollectorOptions<K>,
+  ): ConduitMessageCollector<K>;
+
+  collect(eventsOrOptions: any, options?: any): any {
+    if (Array.isArray(eventsOrOptions)) {
+      return new ConduitMessageCollector(this.eventBus, {
+        ...options,
+        events: eventsOrOptions,
+      });
+    }
+    return new ConduitMessageCollector(this.eventBus, eventsOrOptions);
+  }
+
+  /**
+   * Waits for a single matching event and resolves with it.
+   * Rejects with an error if the timeout expires before any event arrives.
+   *
+   * Internally creates a {@link ConduitMessageCollector} with `max: 1`,
+   * resolves on the first collected event, and stops the collector
+   * with reason `"fulfilled"`.
+   *
+   * **Default overload** — waits for `"message:respond"` only.
+   * Resolves with `MessageRespondPayload`.
+   *
+   * @param options - Collector options minus `max`, which is forced to `1`.
+   *
+   * @example
+   * ```ts
+   * try {
+   *   const reply = await sent.waitResponse({ timeout: 15_000 });
+   *   await ctx.reply(`you said: ${reply.body}`);
+   * } catch {
+   *   await ctx.reply("you took too long!");
+   * }
+   * ```
+   */
+  waitResponse(
+    options?: Omit<CollectorOptions<["message:respond"]>, "max">,
+  ): Promise<CollectorPayload<["message:respond"]>>;
+
+  /**
+   * Waits for a single matching event and resolves with it.
+   * Rejects with an error if the timeout expires before any event arrives.
+   *
+   * Internally creates a {@link ConduitMessageCollector} with `max: 1`,
+   * resolves on the first collected event, and stops the collector
+   * with reason `"fulfilled"`.
+   *
+   * **Custom events overload** — waits for any event in the provided array.
+   * Resolves with the union of all listed event payloads.
+   *
+   * @param events  - Tuple of Conduit event names to subscribe to.
+   * @param options - Collector options minus `max`, which is forced to `1`.
+   *
+   * @example
+   * ```ts
+   * try {
+   *   const response = await sent.waitResponse(
+   *     ["message:respond", "message:react"],
+   *     { timeout: 15_000 },
+   *   );
+   *
+   *   if (response.type === "message:react") {
+   *     await ctx.reply(`you reacted: ${response.reaction}`);
+   *   } else {
+   *     await ctx.reply(`you replied: ${response.body}`);
+   *   }
+   * } catch {
+   *   await ctx.reply("no response!");
+   * }
+   * ```
+   */
+  waitResponse<K extends readonly (keyof ConduitEvents)[]>(
+    events: K,
+    options?: Omit<CollectorOptions<K>, "max">,
+  ): Promise<CollectorPayload<K>>;
+
+  waitResponse(eventsOrOptions: any, options?: any): Promise<any> {
+    const resolved = Array.isArray(eventsOrOptions)
+      ? { ...options, events: eventsOrOptions, max: 1 }
+      : { ...eventsOrOptions, max: 1 };
+
+    return new Promise((resolve, reject) => {
+      const collector = new ConduitMessageCollector(this.eventBus, resolved);
+
+      collector.once("collect", (msg) => {
+        collector.stop("fulfilled");
+        resolve(msg);
+      });
+
+      collector.once("end", (_, reason) => {
+        if (reason === "timeout") reject(new Error("waitResponse timed out"));
       });
     });
   }

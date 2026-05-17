@@ -23,7 +23,7 @@ export { ConduitMessageBuilder } from "./builders/ConduitMessageBuilder.js";
 
 export { ConduitQueue } from "./utils/ConduitQueue.js";
 export { ConduitSlidingCache } from "./utils/ConduitSlidingCache.js";
-export { toFcaEvent } from "./utils/toFcaEvent.js";
+export { ConduitMessageCollector } from "./utils/ConduitMessageCollector.js";
 
 // ─── error ───────────────────────────────────────────────────────────────
 

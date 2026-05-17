@@ -1,59 +1,27 @@
 import { MessengerBotOptions } from "@dongdev/fca-unofficial";
 import { Readable } from "node:stream";
 import { ConduitMessageBuilder } from "./builders/ConduitMessageBuilder.js";
+import { ConduitMessageCollector } from "./utils/ConduitMessageCollector.js";
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
-/**
- * A loose string type that preserves IDE autocomplete for literal unions
- * while still behaving as a normal string at runtime.
- *
- * This is useful for configuration or credential fields where values are
- * technically strings but benefit from inferred literal suggestions.
- */
 export type Loose = string & {};
 
 // ─── Config & Credentials ─────────────────────────────────────────────────────
 
-/**
- * Configuration options for the Conduit client.
- *
- * Extends the underlying Messenger bot options and adds optional queue
- * configuration for message and thread-level execution control.
- *
- * @see MessengerBotOptions
- */
 export interface ConduitClientConfig extends MessengerBotOptions {
   queue?: {
-    /** Configuration for message send/reply queueing behavior. */
     messageQueue?: ConduitQueueConfig;
-    /** Configuration for thread-level queued operations. */
     threadQueue?: ConduitQueueConfig;
   };
-
-  cache: {
+  cache?: {
     cacheUsers: ConduitCacheConfig;
   };
 }
 
-/**
- * Authentication credentials for the Conduit client.
- *
- * Only one authentication strategy should be used per session.
- *
- * Recommended order:
- * 1. appstate (most stable and recommended)
- * 2. cookies (manual session reuse)
- * 3. account (email/password fallback, least stable)
- */
 export interface ConduitCredentials {
-  /** Appstate cookies exported from a browser session. Preferred method. */
   appstate?: Loose[];
-
-  /** Raw cookie header string from a logged-in session. */
   cookies?: Loose;
-
-  /** Email/password login credentials (less stable, may trigger checkpoints). */
   account?: {
     email: Loose;
     password: Loose;
@@ -62,9 +30,6 @@ export interface ConduitCredentials {
 
 // ─── Attachments ──────────────────────────────────────────────────────────────
 
-/**
- * Photo attachment object returned by the underlying FCA layer.
- */
 export interface PhotoAttachment {
   type: "photo";
   ID: string;
@@ -82,9 +47,6 @@ export interface PhotoAttachment {
   name: string;
 }
 
-/**
- * Audio attachment (voice message or audio file).
- */
 export interface AudioAttachment {
   type: "audio";
   ID: string;
@@ -95,9 +57,6 @@ export interface AudioAttachment {
   isVoiceMail: boolean;
 }
 
-/**
- * Sticker attachment with metadata for rendering animated or static stickers.
- */
 export interface StickerAttachment {
   type: "sticker";
   ID: string;
@@ -118,9 +77,6 @@ export interface StickerAttachment {
   spriteURI2x: string | null;
 }
 
-/**
- * Animated image or GIF attachment with multiple rendering formats.
- */
 export interface AnimatedImageAttachment {
   type: "animated_image";
   ID: string;
@@ -141,11 +97,6 @@ export interface AnimatedImageAttachment {
   animatedWebpPreviewUrl: string;
 }
 
-/**
- * Fallback attachment type for unsupported or unknown FCA attachments.
- *
- * This is used when the attachment type is not explicitly mapped in Conduit.
- */
 export interface UnknownAttachment {
   type: string;
   ID: string;
@@ -154,9 +105,6 @@ export interface UnknownAttachment {
   [key: string]: any;
 }
 
-/**
- * Union of all supported message attachment types.
- */
 export type MessageAttachment =
   | PhotoAttachment
   | AudioAttachment
@@ -166,11 +114,6 @@ export type MessageAttachment =
 
 // ─── Shared Shapes ────────────────────────────────────────────────────────────
 
-/**
- * Core message structure shared across all message-related events.
- *
- * Represents the normalized message payload used internally by Conduit.
- */
 export interface Message {
   threadID: string;
   messageID: string;
@@ -182,16 +125,122 @@ export interface Message {
   participantIDs: string[];
 }
 
+// ─── Collector Types ──────────────────────────────────────────────────────────
+
 /**
- * Base structure shared by all thread-related events.
+ * Derives the payload type of a single ConduitEvents key.
  */
-export interface ThreadEventBase {
+export type CollectorEventPayload<K extends keyof ConduitEvents> = Parameters<
+  ConduitEvents[K]
+>[0];
+
+/**
+ * Unions the payload types of all events in a readonly tuple.
+ *
+ * @example
+ * ```ts
+ * // T becomes MessageReactPayload | UserCreatePayload
+ * type T = CollectorPayload<["message:react", "user:create"]>;
+ * ```
+ */
+export type CollectorPayload<K extends readonly (keyof ConduitEvents)[]> =
+  CollectorEventPayload<K[number]>;
+
+/**
+ * Shared configuration for message collectors and one-time await helpers.
+ *
+ * Generic over `K` — the tuple of Conduit events to subscribe to.
+ * The `filter` callback and collected payload type are automatically
+ * derived as a union of all event payloads in `K`.
+ *
+ * @example
+ * ```ts
+ * // default — T is MessageRespondPayload
+ * sent.collect({ timeout: 30_000 });
+ *
+ * // custom — T is MessageReactPayload | UserCreatePayload
+ * sent.collect({
+ *   timeout: 30_000,
+ *   events: ["message:react", "user:create"] as const,
+ * });
+ * ```
+ */
+export interface CollectorOptions<
+  K extends readonly (keyof ConduitEvents)[] = ["message:respond"],
+> {
+  timeout?: number;
+  max?: number;
+
+  /**
+   * Conduit events the collector subscribes to.
+   * Defaults to `["message:respond"]` — only direct replies.
+   */
+  filter?: (message: CollectorPayload<K>) => boolean | Promise<boolean>;
+}
+
+/**
+ * Reasons a collector may stop.
+ */
+export type CollectorEndReason = "timeout" | "limit" | "manual" | "fulfilled";
+
+/**
+ * Internal collected message map.
+ */
+export type CollectedMessages<T = unknown> = Map<string, T>;
+
+/**
+ * Event map for message collectors.
+ */
+export interface MessageCollectorEvents<T = unknown> {
+  collect: (message: T) => Promise<any> | any;
+  end: (
+    collected: ReadonlyMap<string, T>,
+    reason: CollectorEndReason,
+  ) => Promise<any> | any;
+}
+
+/**
+ * Stateful message collector used for streaming replies/messages.
+ */
+export interface MessageCollector<T = unknown> {
+  readonly ended: boolean;
+  readonly collected: ReadonlyMap<string, T>;
+  stop(reason?: CollectorEndReason): void;
+  on<K extends keyof MessageCollectorEvents<T>>(
+    event: K,
+    listener: MessageCollectorEvents<T>[K],
+  ): this;
+  once<K extends keyof MessageCollectorEvents<T>>(
+    event: K,
+    listener: MessageCollectorEvents<T>[K],
+  ): this;
+  off<K extends keyof MessageCollectorEvents<T>>(
+    event: K,
+    listener: MessageCollectorEvents<T>[K],
+  ): this;
+}
+
+// ─── Sent Message ─────────────────────────────────────────────────────────────
+
+export interface SentMessage {
+  messageID: string;
   threadID: string;
 
-  /** User who triggered the event. */
-  author: string;
+  collect(
+    options?: CollectorOptions<["message:respond"]>,
+  ): ConduitMessageCollector<["message:respond"]>;
+  collect<K extends readonly (keyof ConduitEvents)[]>(
+    events: K,
+    options?: CollectorOptions<K>,
+  ): ConduitMessageCollector<K>;
 
-  participantIDs: string[];
+  waitResponse(
+    options?: Omit<CollectorOptions<["message:respond"]>, "max">,
+  ): Promise<CollectorPayload<["message:respond"]>>;
+  waitResponse<K extends readonly (keyof ConduitEvents)[]>(
+    events: K,
+    options?: Omit<CollectorOptions<K>, "max">,
+  ): Promise<CollectorPayload<K>>;
 }
 
 // ─── Enrichment Mixins ────────────────────────────────────────────────────────
@@ -201,67 +250,64 @@ export type ConduitSendableBody =
   | ConduitMessageBody
   | ConduitMessageBuilder;
 
-/**
- * Provides the ability to send a message to the current thread.
- *
- * This helper is injected into all Conduit event payloads.
- */
 export interface Sendable {
-  /** Sends a message to the originating thread. */
-  send(body: ConduitSendableBody): Promise<void>;
+  send(body: ConduitSendableBody): Promise<SentMessage>;
 }
 
-/**
- * Extended capabilities available only on message-related events.
- *
- * Includes replying to and reacting to a specific message.
- */
 export interface Replyable extends Sendable {
-  /** Replies directly to the message that triggered the event. */
-  reply(body: ConduitSendableBody): Promise<void>;
-
-  /** Adds or removes a reaction on the message. */
+  reply(body: ConduitSendableBody): Promise<SentMessage>;
   react(emoji: string): Promise<void>;
+
+  collect(
+    options?: CollectorOptions<["message:respond"]>,
+  ): ConduitMessageCollector<["message:respond"]>;
+  collect<K extends readonly (keyof ConduitEvents)[]>(
+    events: K,
+    options?: CollectorOptions<K>,
+  ): ConduitMessageCollector<K>;
+
+  waitResponse(
+    options?: Omit<CollectorOptions<["message:respond"]>, "max">,
+  ): Promise<CollectorPayload<["message:respond"]>>;
+  waitResponse<K extends readonly (keyof ConduitEvents)[]>(
+    events: K,
+    options?: Omit<CollectorOptions<K>, "max">,
+  ): Promise<CollectorPayload<K>>;
+}
+
+export interface EventPayload<K extends keyof ConduitEvents> {
+  type: K;
 }
 
 // ─── Message Payloads ─────────────────────────────────────────────────────────
 
-/**
- * Emitted when a new message is created.
- *
- * Note: some fields from FCA are inconsistent across event types.
- *
- * @remarks
- * Timestamp format differs depending on event source.
- */
-export interface MessageCreatePayload extends Message, Replyable {
+export interface MessageCreatePayload
+  extends EventPayload<"message:create">,
+    Message,
+    Replyable {
   isGroup: boolean;
 }
 
-/**
- * Emitted when a message is a reply to another message.
- */
-export interface MessageRespondPayload extends Message, Replyable {
+export interface MessageRespondPayload
+  extends EventPayload<"message:respond">,
+    Message,
+    Replyable {
   isGroup: boolean;
-
-  /** The original message being replied to. */
   messageReply: Message;
 }
 
-/**
- * Emitted when a message is removed or unsent.
- */
-export interface MessageRemovePayload extends Sendable {
+export interface MessageRemovePayload
+  extends EventPayload<"message:remove">,
+    Sendable {
   threadID: string;
   messageID: string;
   senderID: string;
   deletionTimestamp: number;
 }
 
-/**
- * Emitted when a reaction is added or removed.
- */
-export interface MessageReactPayload extends Sendable {
+export interface MessageReactPayload
+  extends EventPayload<"message:react">,
+    Sendable {
   threadID: string;
   messageID: string;
   senderID: string;
@@ -269,19 +315,17 @@ export interface MessageReactPayload extends Sendable {
   reaction: string;
 }
 
-/**
- * Emitted when a user starts or stops typing.
- */
-export interface MessageWritingPayload extends Sendable {
+export interface MessageWritingPayload
+  extends EventPayload<"message:writing">,
+    Sendable {
   threadID: string;
   senderID: string;
   isTyping: boolean;
 }
 
-/**
- * Emitted when a message is marked as read.
- */
-export interface MessageReadPayload extends Sendable {
+export interface MessageReadPayload
+  extends EventPayload<"message:read">,
+    Sendable {
   threadID: string;
   readerID: string;
   time: string;
@@ -289,25 +333,31 @@ export interface MessageReadPayload extends Sendable {
 
 // ─── Thread Payloads ──────────────────────────────────────────────────────────
 
-/**
- * Raw thread update event emitted by FCA before fan-out processing.
- */
-export interface ThreadUpdatePayload extends ThreadEventBase, Sendable {
+export interface ThreadEventBase {
+  threadID: string;
+  author: string;
+  participantIDs: string[];
+}
+
+export interface ThreadUpdatePayload
+  extends EventPayload<"thread:update">,
+    ThreadEventBase,
+    Sendable {
   logMessageType: string;
   logMessageData: Record<string, any>;
 }
 
-/**
- * Emitted when a thread title is changed.
- */
-export interface ThreadTitleChangePayload extends ThreadEventBase, Sendable {
+export interface ThreadTitleChangePayload
+  extends EventPayload<"thread:title_change">,
+    ThreadEventBase,
+    Sendable {
   name: string;
 }
 
-/**
- * Emitted when a thread photo is replaced.
- */
-export interface ThreadPhotoReplacedPayload extends ThreadEventBase, Sendable {
+export interface ThreadPhotoReplacedPayload
+  extends EventPayload<"thread:photo_replaced">,
+    ThreadEventBase,
+    Sendable {
   image: {
     attachmentID: string;
     width: number;
@@ -317,10 +367,10 @@ export interface ThreadPhotoReplacedPayload extends ThreadEventBase, Sendable {
   timestamp: string;
 }
 
-/**
- * Emitted when thread theme or color changes.
- */
-export interface ThreadThemeChangedPayload extends ThreadEventBase, Sendable {
+export interface ThreadThemeChangedPayload
+  extends EventPayload<"thread:theme_changed">,
+    ThreadEventBase,
+    Sendable {
   themeColor: string;
   gradient: string;
   themeID: string;
@@ -329,51 +379,43 @@ export interface ThreadThemeChangedPayload extends ThreadEventBase, Sendable {
   themeEmoji: string;
 }
 
-/**
- * Emitted when a participant nickname is changed.
- */
 export interface ThreadNicknameChangedPayload
-  extends ThreadEventBase,
+  extends EventPayload<"thread:nickname_changed">,
+    ThreadEventBase,
     Sendable {
   participantID: string;
   nickname: string;
 }
 
-/**
- * Emitted when admin status changes for a participant.
- */
-export interface ThreadAdminChangedPayload extends ThreadEventBase, Sendable {
+export interface ThreadAdminChangedPayload
+  extends EventPayload<"thread:admin_changed">,
+    ThreadEventBase,
+    Sendable {
   targetID: string;
   adminEvent: "add_admin" | "remove_admin";
 }
 
 // ─── User Payloads ────────────────────────────────────────────────────────────
 
-/**
- * Participant added to a group thread.
- */
 export interface AddedParticipant {
   fbid: string;
   fullName: string;
 }
 
-/**
- * User joined a group thread.
- */
-export interface UserCreatePayload extends ThreadEventBase, Sendable {
+export interface UserCreatePayload
+  extends EventPayload<"user:create">,
+    ThreadEventBase,
+    Sendable {
   addedParticipants: AddedParticipant[];
 }
 
-/**
- * User left or was removed from a group thread.
- */
-export interface UserRemovePayload extends ThreadEventBase, Sendable {
+export interface UserRemovePayload
+  extends EventPayload<"user:remove">,
+    ThreadEventBase,
+    Sendable {
   leftParticipantFbID: string;
 }
 
-/**
- * User info fetched via user ID
- */
 export interface UserInfo {
   name: string;
   firstName: string;
@@ -391,11 +433,6 @@ export type UserInfoResponse = Record<string, UserInfo>;
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
-/**
- * Full event map emitted by Conduit.
- *
- * Each event corresponds to a normalized wrapper over FCA raw events.
- */
 export interface ConduitEvents {
   "message:create": (data: MessageCreatePayload) => Promise<any>;
   "message:remove": (data: MessageRemovePayload) => Promise<any>;
@@ -403,10 +440,8 @@ export interface ConduitEvents {
   "message:respond": (data: MessageRespondPayload) => Promise<any>;
   "message:writing": (data: MessageWritingPayload) => Promise<any>;
   "message:read": (data: MessageReadPayload) => Promise<any>;
-
   "user:create": (data: UserCreatePayload) => Promise<any>;
   "user:remove": (data: UserRemovePayload) => Promise<any>;
-
   "thread:update": (data: ThreadUpdatePayload) => Promise<any>;
   "thread:title_change": (data: ThreadTitleChangePayload) => Promise<any>;
   "thread:photo_replaced": (data: ThreadPhotoReplacedPayload) => Promise<any>;
@@ -417,9 +452,8 @@ export interface ConduitEvents {
   "thread:admin_changed": (data: ThreadAdminChangedPayload) => Promise<any>;
 }
 
-/**
- * Message body structure used when sending content through the API.
- */
+// ─── Message Body ─────────────────────────────────────────────────────────────
+
 export interface ConduitMessageBody {
   body?: string;
   attachment?: NodeJS.ReadableStream | NodeJS.ReadableStream[];
@@ -427,10 +461,6 @@ export interface ConduitMessageBody {
   sticker?: string;
   emoji?: string;
   emojiSize?: "small" | "medium" | "large";
-
-  /**
-   * Mention metadata used for tagging users inside message bodies.
-   */
   mentions?: Array<{
     tag: string;
     id: string;
@@ -440,9 +470,6 @@ export interface ConduitMessageBody {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 
-/**
- * Middleware handler for Conduit events.
- */
 export type Middleware<K extends keyof ConduitEvents> = (
   data: Parameters<ConduitEvents[K]> extends [infer First, ...any[]]
     ? First
@@ -450,16 +477,10 @@ export type Middleware<K extends keyof ConduitEvents> = (
   next?: () => Promise<void>,
 ) => Promise<void>;
 
-// ─── Queue ───────────────────────────────────────────────────────────────────
+// ─── Queue ────────────────────────────────────────────────────────────────────
 
-/**
- * A queued async job executed per thread.
- */
 export type ConduitQueueJob<T> = () => Promise<T>;
 
-/**
- * Configuration for message/thread queue timing behavior.
- */
 export interface ConduitQueueConfig {
   minDelayMs: number;
   maxDelayMs: number;
@@ -467,26 +488,28 @@ export interface ConduitQueueConfig {
   switchDelayMaxMs?: number;
 }
 
-// ─── Builder ───────────────────────────────────────────────────────────────
-/**
- * Input type for attachment builders.
- */
+// ─── Builder ──────────────────────────────────────────────────────────────────
+
 export type ConduitAttachmentInput = string | Buffer | Readable;
 
-// ─── Cache ───────────────────────────────────────────────────────────────
+// ─── Cache ────────────────────────────────────────────────────────────────────
 
-/**
- * The stored value wrapper in the cache map
- */
 export interface ConduitCacheEntry<T> {
   data: T;
   expiresAt: number;
 }
 
-/**
- * Constructor argument in cache
- */
 export interface ConduitCacheConfig {
   ttlInMS: number;
   cleanupIntervalInMS: number;
+}
+
+// ─── Collector ────────────────────────────────────────────────────────────────────
+
+export interface CollectorOptions<
+  K extends readonly (keyof ConduitEvents)[] = ["message:respond"],
+> {
+  timeout?: number;
+  max?: number;
+  filter?: (message: CollectorPayload<K>) => boolean | Promise<boolean>;
 }
